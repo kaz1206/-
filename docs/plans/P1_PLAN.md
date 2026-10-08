@@ -1,6 +1,6 @@
 # P1 実装計画: MT5 単一バックテストの安全な実行と再現可能な保存
 
-- 状態: **計画（承認待ち）**。本計画が承認されるまでコードは書かない。
+- 状態: **承認済み（2026-10-08）→ 実機確認フェーズ中**。手順と記録は `verification/p1/`（[RECORD.md](../../verification/p1/RECORD.md)）。本実装は、実機確認の結果を設計に反映してから着手する。
 - 作成日: 2026-10-08
 - 前提として確認した文書: `docs/ARCHITECTURE.md` v0.2、`docs/research/FINDINGS.md`、`docs/research/SOURCES.md`、`docs/DESIGN_CHANGELOG.md`、`CLAUDE.md`
 - リポジトリの現状: コードは 0 行。ドキュメントのみ（上記 5 ファイル＋`README.md`）。再利用できる既存実装はない。

@@ -40,6 +40,7 @@
 | S-QUANTSTRAT | R quantstrat の `haircutSharpe` / `profitHurdle` | Harvey-Liu の既存実装 | C |
 | S-CC-MEMORY | Claude Code Docs「How Claude remembers your project」 https://code.claude.com/docs/en/memory | プロジェクトの `CLAUDE.md` は VCS で共有する。**1 ファイル 200 行未満が目安**。検証可能な具体的指示で書く。`@path` インポート（コンテキスト量は減らない）。`.claude/rules/` は `paths` フロントマター付き。CLAUDE.md はあくまで文脈であり強制力のある設定ではない（強制したい場合は hooks） | **A** |
 | S-PYPI-VERS | PyPI JSON API（2026-10-08 時点） | 各ライブラリの最新版（`FINDINGS.md` §4） | **A** |
+| S-PYPI-VERS2 | PyPI JSON API（2026-10-08、P1 実機確認フェーズで追加確認） | PyYAML 6.0.3（2025-09-25, ≥3.8）、uv 0.12.23（2026-10-03）、pyarrow 25.0.1 の Parquet は `created_by` にライブラリのバージョンを埋め込む（本環境で実測） | **A** |
 
 ## 2. 原著論文・学術資料
 
