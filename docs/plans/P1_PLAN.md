@@ -303,7 +303,7 @@ rlab backtest run configs/requests/<request>.yaml [--rerun]
 |---|---|---|
 | 単体 | Linux（CI）/ Windows | ID の決定性（hypothesis）、Guard の境界、ini/.set のゴールデン比較、Telemetry 読込と整合性チェック、追記のみの保存 |
 | 結合 | Linux（CI）/ Windows | Fake Terminal（Python 製の偽 `terminal64`）で §3 の全分岐: 成功、開始しない、ハング（タイムアウト）、マーカーなしで終了、行数不一致、損益不一致、Guard 拒否、冪等（2 回目は再実行しない）、`--rerun` |
-| 実機 E2E | Windows ＋ MT5（手動） | `RL_SmokeTest` を EURUSD H1・Holdout 外の 1 年で実行する。①成功し保存される、②`--rerun` で約定 Parquet のハッシュが一致する（W13）、③Holdout と交差する依頼が拒否され、監査ログに残る、④実行中に端末を強制終了すると SUCCEEDED にならない |
+| 実機 E2E | Windows ＋ MT5（手動） | `RL_SmokeTest` を EURUSD H1・Holdout 外の 1 年で実行する。①成功し保存される、②`--rerun` で**正規化した約定データの内容ハッシュ**が一致する（W13、E1）、③Holdout と交差する依頼が拒否され、監査ログに残る、④実行中に端末を強制終了すると SUCCEEDED にならない |
 | 実機で得たデータの固定 | — | 実機で得た本物の Telemetry 出力とログを `tests/fixtures/` に追加し、以後は Linux の回帰テストで使う |
 
 ## 13. 完了条件（Definition of Done）
@@ -311,7 +311,7 @@ rlab backtest run configs/requests/<request>.yaml [--rerun]
 1. Linux 上で `pytest` の単体テスト・結合テストがすべて通る。
 2. W1〜W12 と W14 の確認結果が `docs/research/FINDINGS.md` に記録され、コードがその結果に合わせてある。
 3. Windows 実機で `rlab backtest run` により `RL_SmokeTest` の単一テストが 1 本成功し、DB と artifacts に保存される。
-4. 同じ依頼の `--rerun` で、約定 Parquet のハッシュが一致する（W13。一致しない場合は原因を特定して記録する）。
+4. 同じ依頼の `--rerun` で、**正規化した約定データの内容ハッシュ**（列順・行順・数値表現を固定した正規化 CSV の sha256）が一致する（W13、E1。一致しない場合は原因を特定して記録する）。Parquet のバイト列は比較に使わない。
 5. Holdout と交差する依頼が MT5 を起動せずに拒否され、`holdout_access_log` に残る。分割定義を書き換えると、以後の実行が拒否される。
 6. 端末の強制終了・開始失敗・タイムアウトのいずれも、SUCCEEDED として保存されない。
 7. 生成された ini・artifacts のどこにも、ログイン ID・パスワードが含まれない。
