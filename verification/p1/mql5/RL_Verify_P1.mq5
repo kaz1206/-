@@ -3,6 +3,8 @@
 //| P1 hardware verification EA ONLY. Not part of the P1 product.    |
 //| It does not trade with any intent; it opens/closes the minimum   |
 //| volume deterministically so that deals exist for checking W8.    |
+//| SAFETY: it refuses to start outside the Strategy Tester          |
+//| (MQL_TESTER check in OnInit, re-checked before every order).     |
 //|                                                                  |
 //| Outputs (both FILE_COMMON and the local sandbox):                |
 //|   RLV_<tag>_inputs.json  received input values        (W3)       |
@@ -99,9 +101,22 @@ string WriteBoth(string name, string text)
    return StringFormat("c%dl%d", (int)c, (int)l);
   }
 
+//--- safety: this EA must never send orders outside the Strategy Tester --
+// MQL_TESTER is true only when the program runs in the Strategy Tester
+// (single test, visual test, or optimization). On a live/demo chart it is
+// false, so OnInit fails and the terminal unloads the EA before any tick.
+// IsTesterOnly() is checked again right before every order call
+// (defense in depth), and OnDeinit writes nothing outside the tester.
+bool IsTesterOnly() { return (bool)MQLInfoInteger(MQL_TESTER); }
+
 //--- events ---------------------------------------------------------
 int OnInit()
   {
+   if(!IsTesterOnly())
+     {
+      Print("RLV: refused to start - this verification EA runs only in the Strategy Tester.");
+      return INIT_FAILED;
+     }
    g_seq_oninit   = g_seq++;
    g_init_balance = AccountInfoDouble(ACCOUNT_BALANCE);
    g_trade.SetExpertMagicNumber(RLV_MAGIC);
@@ -111,6 +126,8 @@ int OnInit()
 
 void OnNewBar()
   {
+   if(!IsTesterOnly())   // the ONLY function that sends orders; guarded again
+      return;
    double vol = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
    // close own positions held for >= 5 bars
    for(int i = PositionsTotal() - 1; i >= 0; i--)
@@ -136,6 +153,8 @@ void OnNewBar()
 
 void OnTick()
   {
+   if(!IsTesterOnly())
+      return;
    MqlTick t;
    if(!SymbolInfoTick(_Symbol, t))
       return;
@@ -169,6 +188,8 @@ double OnTester()
 
 void OnDeinit(const int reason)
   {
+   if(!IsTesterOnly())   // also called after INIT_FAILED; write nothing outside the tester
+      return;
    g_seq_ondeinit = g_seq++;
    string tag = Tag();
    int open_positions_at_deinit = PositionsTotal();

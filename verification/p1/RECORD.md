@@ -70,6 +70,7 @@
 - **確認内容**: `terminal64.exe /portable /config:<ini>`（`[Tester]`、`Optimization=0`）でテストが始まり、`ShutdownTerminal=1` で端末が自動終了するか。終了コードの値。ini の文字コード（ASCII で通るか）
 - **操作手順**: R1（自動）。失敗時のみ R1c（ini を UTF-16LE）
 - **期待結果**: R1 の `exited_by_itself = true`、`status = DONE`
+- **前提**: README 手順 1-5 で「アルゴリズム取引」をオフにしている（安全のため）。テスターがこのボタンに影響されないことも、R1 の成否で同時に確認する
 - **判定方法**: `summary.json` の `runs[R1]`、テスターログ
 - **実際の結果**: （未記入）
 - **設計への影響**: （未記入）。想定: そのまま P1_PLAN §2.1 の方式で確定。R1c でしか通らない場合は、ini の生成を UTF-16LE にする
