@@ -1,6 +1,6 @@
 # MT5 EA ロバスト性評価基盤 — アーキテクチャ設計書
 
-- 版: v0.1（設計のみ・コードなし）
+- 版: v0.2（設計のみ・コードなし）— v0.2 で一次情報・原著研究のレビューを反映。変更点は [DESIGN_CHANGELOG.md](DESIGN_CHANGELOG.md)、根拠は [research/FINDINGS.md](research/FINDINGS.md) と [research/SOURCES.md](research/SOURCES.md)。本文中の `[S-xxx]` は情報源 ID、`(C#)` は変更番号
 - 対象: MT5 Strategy Tester をバックテストエンジンとして使い、EA のロバスト性・過学習耐性・DD/破産リスクを体系的に評価し、最終的に資金配分まで決定する研究基盤
 
 ---
@@ -610,8 +610,9 @@ Candidate cd_3f9a… (MAcross_v3 EURUSD H1 fast=12 slow=48 sl=40)
 | ブートストラップ単位 | 取引 | 取引/日次 | 日次ブロック | 日次ブロック | **日次ブロック（取引の独立性が成り立たない）** |
 
 **取引数の統計的十分性ルール（固定値の代わり）**:
-- 1 取引あたり Sharpe（期待値 ÷ 標準偏差）を `s` とすると、期待値が 0 より大きいと有意水準 α で言うのに必要な取引数の目安は `n ≈ (z_α / s)²`（＋歪度・尖度補正）。
-- 実装上は **PSR（Probabilistic Sharpe Ratio）≥ 閾値** を取引数ゲートの本体とし、絶対下限（例: 30）は安全装置としてのみ持つ。
+- 既存の **MinTRL（Minimum Track Record Length）** [S-PSR] を使う (C1)。MinTRL = 1 + [1 − γ̂₃·ŜR + (γ̂₄−1)/4·ŜR²]·(z_α / (ŜR − SR*))²（ŜR は観測頻度のまま、年率化しない）。負の歪度や厚い裾ほど、必要な標本長が自動的に長くなる。
+- ゲートの本体は **PSR(SR*=0) ≥ 閾値**（同じ論文の式）。MinTRL はレポートで「あと何日/何取引必要か」を示すのに使う。絶対下限（例: 30）は安全装置としてのみ持つ。
+- v0.1 の目安式 `n ≈ (z_α / s)²` は MinTRL を粗く再発明したものだったので撤回した。
 - これにより「低頻度だが優位性が大きい戦略」と「高頻度で優位性が薄い戦略」を同じ物差しで公平に扱える。
 
 ---
@@ -628,20 +629,23 @@ Candidate cd_3f9a… (MAcross_v3 EURUSD H1 fast=12 slow=48 sl=40)
 | **Deflated Sharpe Ratio** | 多数の試行から最良を選んだことによる Sharpe の選択バイアス補正 | 高（最適化＝大量試行のため必須級） | 全試行の Sharpe 分散・試行回数・選択候補の歪度尖度 | 低〜中（式は単純、**試行回数の正確な把握が難所**） | **MVP**（試行回数は保守的に生の N） | ⑤ |
 | **Walk-Forward Analysis** | 再最適化手続きの頑健性 | 中（固定パラメータ運用なら不要） | 窓ごとの最適化実行（計算量大） | 中（MT5 実行回数が多い） | 将来 | 別トラック |
 | **Probability of Backtest Overfitting（CSCV）** | 「IS で最良の構成が OOS で中央値未満になる確率」 | 高（選抜手続き全体の過学習度を数値化） | **全試行の T×N 日次損益行列**（Telemetry 必須） | 中 | **Phase 2**（Telemetry Frames 整備後） | ⑤（ラウンド単位の診断） |
-| **White's Reality Check** | 最良戦略がベンチマークを上回るのが偶然でないかの検定 | 中（SPA の方が優れる） | 全試行の損益系列 | 中 | 将来（SPA に包含して提供） | ⑤ |
-| **Hansen's SPA** | RC の改良版。劣悪な候補の混入に頑健 | 中〜高 | 全試行の損益系列 | 中（`arch` ライブラリで実装可） | **Phase 2〜3** | ⑤ |
-| **Combinatorial Purged CV** | 時系列 CV で複数の OOS 経路を作り、性能分布を推定 | 低〜中（ML 型戦略向け。MT5 パラメータ最適化とは相性が悪い） | 期間グループ別の再最適化結果 | 高（MT5 実行回数が組合せ的に増える） | 将来（ML 戦略導入時） | ⑤ / 別トラック |
-| （追加提案）Haircut Sharpe（Harvey-Liu） | 多重検定を考慮した Sharpe の割引 | 中 | DSR と同等 | 低 | 将来 | ⑤ |
+| **White's Reality Check** | 最良戦略がベンチマークを上回るのが偶然でないかの検定 | 中（SPA の方が優れる） | 全試行の損益系列 | — | **独立実装しない**。arch の `SPA` から特殊ケースとして得る (C3) [S-ARCH] | ⑤ |
+| **Hansen's SPA / Romano-Wolf StepM** | SPA: ラウンドに本物のエッジを持つ候補があるか。StepM: **どの候補が**「取引しない」を有意に上回るか（FWER を制御） | 中〜高 | 全試行の日次損益（Telemetry Frames） | 低（**arch の `SPA`/`StepM` を使う**。入力は損失なので符号を反転。バージョン固定） | **Phase 2〜3**。StepM を優先 (C4) | ⑤ |
+| **Combinatorial Purged CV** | 時系列 CV で複数の OOS 経路を作り、性能分布を推定 | 低（ML 型戦略向け。各分割で MT5 再最適化が必要） | 期間グループ別の再最適化結果 | 高 | **不採用**（ML 型 EA を導入するまで保留。導入時は skfolio を使う）(C9) | — |
+| （追加提案）Haircut Sharpe（Harvey-Liu） | 多重検定を考慮した Sharpe の割引 | 低（DSR と重複） | DSR と同等 | 低 | **不採用**（検算用に R quantstrat を任意で使う）(C8) | — |
 | （追加提案）Entry Randomization / Permutation Test | 同じエグジット・頻度でエントリーをランダム化した「偽戦略」との比較 | 高（エッジがエントリー由来か確認） | EA に乱数エントリーモード | 中 | Phase 2 | ⑤ |
 
 ### 10.2 MVP の統計評価の具体像
 
-1. **PSR**: 各 Run の日次損益から Sharpe・歪度・尖度・標本長を算出し、`PSR(SR* = 0)` を計算。取引数ゲートに使用。
-2. **DSR**:
+1. **PSR / MinTRL** [S-PSR]: 各 Run の日次損益から、年率化しない Sharpe・歪度・尖度・標本長を算出し、`PSR(SR* = 0)` と MinTRL を計算する。取引数ゲートに使う。自前実装（式のみ）で、原著の数値例と R PerformanceAnalytics を検算の基準にする。
+2. **DSR** [S-DSR]: SR₀ = √V[ŜR]·((1−γ)Φ⁻¹(1−1/N) + γΦ⁻¹(1−1/(Ne)))、DSR = PSR(SR₀)。
    - 試行回数 N: `trial_ledger` の値。**同じ戦略ファミリーで過去に捨てた Study・ラウンドの試行も合算**（研究者の自由度を含める）。MVP は相関を無視した生の N（保守的＝過大補正側）。
-   - 試行間 Sharpe の分散: MVP は MT5 パス別指標から近似、Phase 2 で Telemetry の日次損益から正確に算出。
-   - 有効試行数（N_eff）: Phase 2 で試行間相関のクラスタリング（例: 階層クラスタ数）から推定。
-3. **Bootstrap 信頼区間**: 期待値・Sharpe・最大 DD の 90% 区間。日次ブロックブートストラップ（ブロック長は自己相関から自動選択、または既定 5〜20 日）。
+   - 試行間 Sharpe の分散: MVP は MT5 のパス別指標から近似する。ただし MT5 の Sharpe は定義が不明なので、**Telemetry Frames を導入するまでは DSR を参考値（WARN）として扱い、FAIL 判定には使わない** (C7)。Phase 2 で Telemetry の日次損益から正確に算出する。
+   - 実効試行数（N_eff）: Phase 2 で **López de Prado & Lewis (2019) の相関クラスタリング手法** [S-ONC] を使って推定する (C6)。
+3. **Bootstrap 信頼区間**: 期待値・Sharpe・最大 DD の 90% 区間。**Stationary Bootstrap（Politis-Romano 1994）＋ブロック長の自動選択（Politis-White 2004、Patton ら 2009 の補正）**を、arch の `StationaryBootstrap` と `optimal_block_length` で行う (C2) [S-SB][S-PW][S-ARCH]。乱数シードは必ず記録する。
+4. **PBO（Phase 2）**: R `pbo` 1.3.5 [S-PBO-R] の CSCV に忠実に移植し、R `pbo` との数値一致を回帰テストにする (C5)。**ラウンド単位の診断**（PBO が高いラウンドから出た候補全体に WARN を付ける）として使い、個別候補の順位付けには使わない。
+
+各手法の評価（何を測るか・仮定・適合性・重複・コスト）は [research/FINDINGS.md §1](research/FINDINGS.md) を参照。
 
 ### 10.3 統計手法の差し替え構造
 
@@ -718,7 +722,7 @@ DSR 等が正しく機能するかは、**N（試行回数）をどれだけ正�
 | `dd_constrained_v1` | MC の DD 分布から「P(DD > 許容 DD L) ≤ α」となる最大の f を求める。固定ロットでは DD がほぼ f に比例するので f_DD = L / DD_q(1−α)（1 単位あたり） | DD 分布の裾で吸収 | **MVP（最重要）** |
 | `fractional_kelly_v1` | f_K = μ_LCB / σ²（連続近似）× 分数（既定 0.25〜0.5） | μ に**信頼下限（Bootstrap 下側 25% 点など）**を使う、DSR/OOS 整合性で信頼度係数を掛ける | **MVP** |
 | `vol_target_v1` | 目標ボラ ÷ 推定ボラ でスケール | EWMA ボラ等 | Phase 2 |
-| `multi_kelly_v1` | f = Σ⁻¹ μ（共分散は Ledoit-Wolf 縮小推定） | 縮小推定・μ の下限 | 将来 |
+| `multi_rck_v1` | **多資産 Risk-Constrained Kelly**（Busseti-Ryu-Boyd 2016、cvxpy で凸最適化）。v0.1 の `multi_kelly`（Σ⁻¹μ）は平均の推定誤差に極端に弱いので置き換えた (C11) [S-RCK][S-MTZ] | DD 制約を直接扱う・μ の下限 | 将来 |
 | `risk_parity_v1`（ERC） | リスク寄与均等 | μ を使わない＝推定誤差に強い | 将来 |
 
 ### 12.3 最終リスク比率の決定ルール（MVP 既定）
@@ -731,6 +735,12 @@ f_raw       = min(f_kelly_adj, f_dd, f_cap)
 f_final     = f_raw × confidence_weight × ramp_up_factor
 ```
 
+**このルールの位置付け (C10)**: これは独自の発明ではなく、**Risk-Constrained Kelly [S-RCK] の 1 変数版**です。単一 EA では成長率が f について凹で、DD 制約は f が大きいほど厳しくなる（単調）ので、最適解は「無制約の Kelly 解」と「制約を満たす最大の f」の小さい方になります。原著との違いは次の 2 点で、どちらも意図的です。
+- 制約: 原著は「初期資産からの下落確率」、本基盤は「ピークからの DD」（実運用の停止判断に直結するため）。
+- 解き方: 原著は凸近似、本基盤は MC で直接評価（1 変数なので可能）。
+
+μ_LCB と分数化の根拠は、Kelly では平均の推定誤差の影響が支配的であること（平均:分散:共分散 ≈ 20:2:1）[S-MTZ]。役割を分けて記録します: **μ_LCB = 推定誤差への備え、分数 = モデル誤差（非定常性）への備え**。μ_LCB を使う場合の分数の既定値は 0.5。
+
 - `confidence_weight`（0〜1）: DSR、OOS の予測帯整合性、取引数（標本の大きさ）から決定。証拠が薄いほど小さい。
 - `ramp_up_factor`: 実運用開始直後は 0.25 などから開始し、実績の蓄積と整合性確認に応じて段階的に引き上げ（§12.5）。
 - **どの制約が効いたか（binding_constraint）を必ず記録**。多くの場合 DD 制約が効くはずで、それが健全な状態。
@@ -741,7 +751,7 @@ f_final     = f_raw × confidence_weight × ramp_up_factor
 ```
 lot = floor_to_lot_step( f_final × Equity / RiskPerLot )
 ```
-- `RiskPerLot`: リスク単位定義に応じて、1 ロットあたり DD_q99 または 1 取引 SL 損失額（銘柄仕様スナップショットのティック価値で円/ドル換算）。
+- `RiskPerLot`: リスク単位定義に応じて、1 ロットあたり DD_q99 または 1 取引 SL 損失額。**金額換算と必要証拠金は MetaTrader5 API の `order_calc_profit` / `order_calc_margin` に任せ、ロットの最小値・刻みは `symbol_info` から取る**。ティック価値からの自前換算はしない (C12) [S-MT5PY]。
 - チェック: 最大同時ポジション時の必要証拠金 ≤ 証拠金予算、`lot ≥ min_lot`。満たさない場合は**切り上げず** `INFEASIBLE_MIN_LOT` / `MARGIN_BUDGET_EXCEEDED` として報告（小口座で過大リスクになるのを防ぐ）。
 - 口座通貨と銘柄の決済通貨が異なる場合の換算レートは、計算時点の値を記録（再現性）。
 
@@ -794,7 +804,7 @@ lot = floor_to_lot_step( f_final × Equity / RiskPerLot )
 | 方式 | テスト開始 | 完了検知 | 結果取得 | 並列化 | 評価 |
 |---|---|---|---|---|---|
 | **設定ファイル + コマンドライン**（`terminal64.exe /config:tester.ini`） | ✅ `[Tester]` セクションで EA・銘柄・期間・モデル・最適化・レポート出力先・終了後シャットダウンを指定 | プロセス終了（`ShutdownTerminal=1`）＋レポート/完了マーカー | 最適化: XML（SpreadsheetML）、単一: HTML 系レポート ＋ Telemetry | ポータブル端末を複数用意 | **採用（主方式）** |
-| **MetaTrader5 Python API**（`MetaTrader5` パッケージ） | ❌ Strategy Tester を操作する API がない | — | — | — | **補助として採用**: 銘柄仕様（契約サイズ・ティック価値・スワップ）の取得、価格履歴取得（レジーム判定・データ検証）、**実運用の約定履歴取得**（Live Monitoring） |
+| **MetaTrader5 Python API**（`MetaTrader5` パッケージ） | ❌ Strategy Tester を操作する API がない（5.0.6231 の公開関数で確認済み。Windows のみ）[S-MT5PY] | — | — | — | **補助として採用**: `order_calc_profit`/`order_calc_margin` による金額・証拠金換算、 銘柄仕様（契約サイズ・ティック価値・スワップ）の取得、価格履歴取得（レジーム判定・データ検証）、**実運用の約定履歴取得**（Live Monitoring） |
 | **GUI 自動化**（pywinauto 等） | △ | △ | △ | ✕ | 不採用（壊れやすい・再現性低） |
 | **MQL5 側テレメトリ**（EA に Include 追加、`OnTester`/`FrameAdd`/`OnTesterPass`） | — | ✅ 完了マーカー出力 | ✅ パス別の日次損益・最大含み損・最大ポジション等 | — | **採用（必須部品）** |
 | **MQL5 Cloud Network** | ✅ | ✅ | ✅ | 大 | 将来・任意（費用発生、環境差の管理が難しいため最終検証には使わない） |
@@ -810,7 +820,7 @@ lot = floor_to_lot_step( f_final × Equity / RiskPerLot )
 | `Symbol`, `Period` | 候補定義から |
 | `Model` | 探索: `1 minute OHLC` 可 ／ ⑦以降: **`Every tick based on real ticks` 必須**。異なるモデルの結果は比較しない（`MODEL_MISMATCH`） |
 | `ExecutionMode` | 遅延（ms）。⑦以降は現実的遅延 or ランダム遅延 |
-| `Optimization` | 0=単一 / 1=完全 / 2=遺伝的。MVP は 1 推奨 |
+| `Optimization` | 0=単一 / 1=完全 / 2=遺伝的。MVP は 1 推奨。**3（全銘柄モード）は使用禁止**（build 6061 で XML が空になるという報告がある (C15) [S-COMM-6061]）。値の対応は実機で確認する（[FINDINGS §3](research/FINDINGS.md)） |
 | `OptimizationCriterion` | カスタム（`OnTester` の戻り値）を使う場合はテレメトリ側で定義 |
 | `FromDate`, `ToDate` | Holdout Guard 通過後の値のみ |
 | `ForwardMode` | **0（無効）固定**。期間管理は本基盤が行う（MT5 のフォワードを使うと最適化時点で将来期間の結果を見てしまう） |
@@ -830,6 +840,7 @@ lot = floor_to_lot_step( f_final × Equity / RiskPerLot )
 | 観点 | 設計 |
 |---|---|
 | **テスト開始** | (1) Holdout Guard 検査 → (2) ini/.set 生成（ジョブ専用ディレクトリ）→ (3) EA の .ex5 ハッシュ照合（意図した版か）→ (4) 出力先の古いファイル削除 → (5) `terminal64.exe /portable /config:…` を起動し PID を記録、状態 RUNNING |
+| **開始検知** (C14) | 起動後、一定時間内にテスターログへテスト開始行が出なければ `FAILED_TO_START`（「端末は起動するがテストが始まらない」という報告がある [S-FORUM-BATCH]）。プロセスを終了させてから分類する |
 | **完了検知** | 3 条件の AND: ① プロセス終了、② レポートファイルが存在し解析可能、③ **Telemetry 完了マーカー**（`OnTesterDeinit`/`OnDeinit` で書く「完了・パス数・チェックサム」ファイル）。最適化は「期待パス数 = 実パス数」も確認 |
 | **結果取得** | Collection が XML/HTML とテレメトリ（共通フォルダ `FILE_COMMON` 配下のジョブ別ファイル）を読み取り、Artifact Store にコピー＆ハッシュ化 |
 | **タイムアウト** | ジョブごとに推定時間（過去の 1 パス平均 × パス数 × 安全係数）から上限を設定。加えて**ハートビート**（テスターログ・エージェントログの更新時刻）が一定時間止まったらハング判定。超過時はプロセスツリーごと強制終了（psutil）→ `TIMED_OUT` |
@@ -853,7 +864,8 @@ EA に 1 行 `#include` するだけで以下を提供する共通部品（EA �
 | 日次エクイティ記録 | 日足確定ごとに残高・エクイティ・含み損益・証拠金維持率・ポジション数 | Sharpe 再計算、相関、ポートフォリオ MC |
 | 取引記録 | 約定ごとの時刻・方向・ロット・価格・損益・手数料・スワップ・MAE/MFE | Bootstrap、コストストレス、利益集中度 |
 | 最大含み損・最大ポジション・最小証拠金維持率 | ティックごとに更新 | グリッド系リスク評価 |
-| 最適化パスごとの送信 | `OnTester` で `FrameAdd` により日次損益系列を送信、端末側 `OnTesterPass` で受信、`OnTesterDeinit` でファイル出力 | DSR の正確化、PBO、SPA |
+| 最適化パスごとの送信 | `OnTester` で `FrameAdd` により日次損益系列を送信し、端末側の `OnTesterPass` で受信する。**`OnTesterDeinit` で最後に `FrameNext` ループを回して遅れて届いたフレームも回収**してからファイルに出力する [S-MQL5BOOK-FRAME] | DSR の正確化、PBO、StepM/SPA |
+| 単一テストの出力 (C13) | **テスターイベント（`OnTesterInit/Pass/Deinit`）と Frames は最適化時のみ動き、単一テストでは使えない** [S-MQL5BOOK-TESTER]。単一テストでは `OnDeinit` で `FILE_COMMON` に直接書き出す [S-MQL5BOOK-FILES]。ファイル名には入力パラメータで渡した**ジョブ ID とパス番号を必ず含める**（複数エージェントの同名ファイル衝突を防ぐ） | 単一テストの取引・日次エクイティ |
 | 完了マーカー | パス数・チェックサム・Telemetry バージョン | 完了検知・取りこぼし検知 |
 | 固定ロット評価モード | 入力パラメータで強制 | リスク単位正規化 |
 | カスタム最適化基準 | `OnTester` の戻り値 | MT5 内の並び替え用（選抜には使わない） |
@@ -902,10 +914,11 @@ EA に 1 行 `#include` するだけで以下を提供する共通部品（EA �
 | 近傍ロバストネス（グリッド既存パス）・Robust Score | ✅ | 摂動自動生成 | Sobol 感度 | 費用対効果最大 |
 | コストストレス（事後計算） | ✅ | 再シミュレーション | | |
 | サブ期間一貫性・利益集中度 | ✅ | | | |
-| DSR（生 N）・Bootstrap CI | ✅ | N_eff 推定 | Haircut Sharpe | |
+| PSR/MinTRL・DSR（生 N、Frames 導入までは WARN 止まり）・Stationary Bootstrap CI（arch） | ✅ | N_eff（López de Prado & Lewis 2019） | | Haircut Sharpe は DSR と重複するので不採用 (C8) |
 | PBO（CSCV） | | ✅ | | Frames が前提 |
-| Hansen SPA / White RC | | | ✅ | `arch` で実装可だが運用価値は PBO/DSR の後 |
-| CPCV / WFA | | | ✅ | 本基盤の主目的（固定パラメータ）と別トラック |
+| StepM / SPA（arch。RC は SPA に含まれる） | | ✅（StepM 優先） | SPA | 自前実装しない (C3, C4) |
+| WFA | | | ✅ | 本基盤の主目的（固定パラメータ）とは別トラック |
+| CPCV | | | 保留 | ML 型 EA の導入時のみ。導入時は skfolio を使う (C9) |
 | Selector: hard_gate / lexicographic / pareto / region | ✅ | correlation_diverse | weighted | |
 | 複数期間検証・OOS（マニフェスト・予測帯） | ✅ | | | |
 | Risk MC（取引・日次ブロック） | ✅ | | | |
@@ -1082,7 +1095,7 @@ rlab ledger  <strategy_family>            # 試行回数台帳
 | **P9 リスクと配分** | Risk MC、fixed / dd_constrained / fractional_kelly、ロット変換 | binding_constraint が記録され、min lot 未満は INFEASIBLE |
 | **P10 帰無仮説テスト** | §19.3 のパイプライン偽陽性率測定 | 偽陽性率が許容範囲 ← **ここまでが MVP** |
 | P11 自動連結 | Pipeline Runner・Resume | 途中停止→再開で結果が一致 |
-| P12 Phase 2 統計 | パス別 Frames、PBO、N_eff、摂動自動生成 | |
+| P12 Phase 2 統計 | パス別 Frames、PBO（R `pbo` からの移植）、N_eff、StepM（arch）、摂動自動生成 | PBO が R `pbo` 1.3.5 と同じ入力で数値一致する |
 | P13 ポートフォリオ | 相関・同時 DD・全体 MC・スケール係数 | |
 | P14 将来 | SPA、再シミュレーション・コストストレス、Live Monitoring、ベイズ更新、HRP | |
 
@@ -1177,15 +1190,17 @@ rlab ledger  <strategy_family>            # 試行回数台帳
 | 用途 | ライブラリ | 備考 |
 |---|---|---|
 | データ処理 | pandas, numpy, pyarrow | Parquet 入出力 |
-| 統計 | scipy, statsmodels | PSR/DSR は自前実装（式が単純） |
-| Bootstrap / SPA / RC | **arch**（`arch.bootstrap`: StationaryBootstrap, SPA, StepM） | Phase 2〜 |
-| 共分散縮小推定・クラスタリング | scikit-learn（LedoitWolf, DBSCAN） | 将来 |
+| 統計 | scipy, statsmodels | PSR/DSR/MinTRL は自前実装（式が単純）。検算の基準は原著の数値例と R PerformanceAnalytics |
+| Bootstrap / ブロック長 / SPA / StepM | **arch 8.0.0**（`StationaryBootstrap`, `optimal_block_length`, `SPA`, `StepM`）。**バージョンを固定**（main と v8.0.0 で SPA の挙動が違う） | Bootstrap は MVP、SPA/StepM は Phase 2〜 |
+| PBO | 自前の移植（R `pbo` 1.3.5 と数値一致をテスト） | Phase 2 |
+| 実効試行数のクラスタリング・共分散縮小推定 | scikit-learn | Phase 2 / 将来 |
+| 多資産 RCK | cvxpy | 将来 |
 | 設定・スキーマ | **pydantic** v2, PyYAML（または ruamel.yaml）, tomllib | |
 | CLI | **Typer**, Rich（表示） | |
 | DB | sqlite3 標準 or SQLAlchemy Core | マイグレーションは簡易自前 or Alembic |
 | プロセス管理 | **psutil** | プロセスツリー強制終了・生存確認 |
 | ログ | structlog（JSON Lines） | |
-| MT5 補助 | MetaTrader5（公式 Python パッケージ） | 銘柄仕様・履歴・実運用約定 |
+| MT5 補助 | MetaTrader5 5.0.6231（公式 Python パッケージ、**Windows のみ**。テスター機能はない） | 銘柄仕様・履歴・`order_calc_profit`/`order_calc_margin`・実運用約定 |
 | レポート | Jinja2 + Plotly（HTML） | |
 | テスト | pytest, **hypothesis** | |
 | 高速化（任意） | numba | 大規模 MC 時 |

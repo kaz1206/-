@@ -6,3 +6,6 @@ MT5 Strategy Tester をバックテストエンジンとして利用し、EA の
 現在は **アーキテクチャ設計のみ** の段階です。
 
 - 設計書: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 調査結果（手法評価・MT5 仕様確認）: [docs/research/FINDINGS.md](docs/research/FINDINGS.md)
+- 情報源レジストリ: [docs/research/SOURCES.md](docs/research/SOURCES.md)
+- 設計変更履歴: [docs/DESIGN_CHANGELOG.md](docs/DESIGN_CHANGELOG.md)
