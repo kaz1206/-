@@ -1,0 +1,212 @@
+"""SQLite storage for P1 (ARCHITECTURE §5, P1_PLAN §5).
+
+Research-result tables are append-only, enforced by triggers. Only `job`
+(operational state) may be updated.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Iterator
+
+SCHEMA_VERSION = 1
+
+_APPEND_ONLY = (
+    "partition_registry",
+    "holdout_access_log",
+    "strategy_version",
+    "candidate",
+    "run",
+    "artifact",
+    "job_artifact",
+    "mt5_reported_metrics",
+)
+
+_DDL = """
+CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
+
+CREATE TABLE IF NOT EXISTS partition_registry (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    partition_hash TEXT NOT NULL,
+    partition_json TEXT NOT NULL,
+    registered_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS holdout_access_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requested_at TEXT NOT NULL,
+    request_hash TEXT NOT NULL,
+    from_date TEXT NOT NULL,
+    to_date TEXT NOT NULL,
+    partition_hash TEXT NOT NULL,
+    approved INTEGER NOT NULL,
+    reason TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS strategy_version (
+    strategy_version_id TEXT PRIMARY KEY,
+    strategy_name TEXT NOT NULL,
+    expert TEXT NOT NULL,
+    ex5_sha256 TEXT NOT NULL,
+    mq5_sha256 TEXT,
+    source_available INTEGER NOT NULL,
+    telemetry_version TEXT NOT NULL,
+    inputs_json TEXT NOT NULL,
+    registered_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS candidate (
+    candidate_id TEXT PRIMARY KEY,
+    strategy_version_id TEXT NOT NULL REFERENCES strategy_version(strategy_version_id),
+    symbol TEXT NOT NULL,
+    timeframe TEXT NOT NULL,
+    params_json TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS run (
+    run_id TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
+    from_date TEXT NOT NULL,
+    to_date TEXT NOT NULL,
+    period_semantics TEXT NOT NULL,
+    tester_settings_json TEXT NOT NULL,
+    tester_settings_hash TEXT NOT NULL,
+    partition_hash TEXT NOT NULL,
+    cost_scenario TEXT NOT NULL,
+    source TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS job (
+    job_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    spec_hash TEXT NOT NULL,
+    spec_json TEXT NOT NULL,
+    attempt_no INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    error_class TEXT,
+    error_detail TEXT,
+    terminal_path TEXT NOT NULL,
+    pid INTEGER,
+    exit_code INTEGER,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT,
+    observed_build INTEGER,
+    observed_env_json TEXT,
+    deals_count INTEGER,
+    deals_content_hash TEXT,
+    net_profit_mt5 TEXT,
+    net_profit_sum TEXT,
+    warnings_json TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS job_run ON job(run_id);
+
+CREATE TABLE IF NOT EXISTS artifact (
+    sha256 TEXT PRIMARY KEY,
+    size INTEGER NOT NULL,
+    rel_path TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS job_artifact (
+    job_id TEXT NOT NULL REFERENCES job(job_id),
+    role TEXT NOT NULL,
+    name TEXT NOT NULL,
+    sha256 TEXT NOT NULL REFERENCES artifact(sha256),
+    PRIMARY KEY (job_id, role, name)
+);
+
+CREATE TABLE IF NOT EXISTS mt5_reported_metrics (
+    job_id TEXT NOT NULL REFERENCES job(job_id),
+    name TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (job_id, name)
+);
+"""
+
+
+def _triggers() -> str:
+    out = []
+    for t in _APPEND_ONLY:
+        for op in ("UPDATE", "DELETE"):
+            out.append(
+                f"CREATE TRIGGER IF NOT EXISTS {t}_no_{op.lower()} BEFORE {op} ON {t} "
+                f"BEGIN SELECT RAISE(ABORT, '{t} is append-only'); END;"
+            )
+    return "\n".join(out)
+
+
+def now_iso() -> str:
+    return dt.datetime.now(dt.UTC).isoformat(timespec="milliseconds")
+
+
+class Database:
+    def __init__(self, path: Path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
+        self.conn = sqlite3.connect(path, isolation_level=None)  # explicit transactions only
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        self.conn.execute("PRAGMA journal_mode = WAL")
+        self._migrate()
+
+    def close(self) -> None:
+        self.conn.close()
+
+    def _migrate(self) -> None:
+        # executescript() commits implicitly, so the idempotent DDL runs outside tx().
+        self.conn.executescript(_DDL + _triggers())
+        with self.tx():
+            row = self.conn.execute("SELECT version FROM schema_version").fetchone()
+            if row is None:
+                self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
+            elif row["version"] != SCHEMA_VERSION:
+                raise RuntimeError(f"unsupported schema version {row['version']} (expected {SCHEMA_VERSION})")
+
+    @contextmanager
+    def tx(self) -> Iterator[sqlite3.Connection]:
+        if self.conn.in_transaction:
+            yield self.conn
+            return
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield self.conn
+        except BaseException:
+            self.conn.execute("ROLLBACK")
+            raise
+        else:
+            self.conn.execute("COMMIT")
+
+    # --- generic helpers -------------------------------------------------
+    def insert(self, table: str, row: dict[str, Any], *, if_absent: bool = False) -> None:
+        cols = ", ".join(row)
+        marks = ", ".join("?" for _ in row)
+        verb = "INSERT OR IGNORE" if if_absent else "INSERT"
+        with self.tx():
+            self.conn.execute(f"{verb} INTO {table} ({cols}) VALUES ({marks})", tuple(row.values()))
+
+    def one(self, sql: str, params: tuple = ()) -> sqlite3.Row | None:
+        return self.conn.execute(sql, params).fetchone()
+
+    def all(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
+        return self.conn.execute(sql, params).fetchall()
+
+    # --- job (the only mutable table) -----------------------------------
+    def update_job(self, job_id: str, **fields: Any) -> None:
+        if not fields:
+            return
+        for k, v in list(fields.items()):
+            if isinstance(v, (list, dict)):
+                fields[k] = json.dumps(v, ensure_ascii=False, sort_keys=True)
+        sets = ", ".join(f"{k} = ?" for k in fields)
+        with self.tx():
+            cur = self.conn.execute(f"UPDATE job SET {sets} WHERE job_id = ?", (*fields.values(), job_id))
+            if cur.rowcount != 1:
+                raise KeyError(job_id)
