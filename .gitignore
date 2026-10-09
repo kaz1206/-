@@ -1,0 +1,15 @@
+# local runtime data (DB, artifacts, logs: logs contain account login and IP address)
+workspace/
+# per-machine terminal settings
+configs/terminal.yaml
+# verification results (contain account/IP information)
+verification/*/results/
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.hypothesis/
+*.egg-info/
+dist/
+build/
