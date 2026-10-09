@@ -1,0 +1,9 @@
+# Copy to configs/terminal.yaml (git-ignored) and adjust for this PC.
+# Use a dedicated PORTABLE terminal logged into a DEMO account with the password saved
+# in the terminal itself. Never put login/password here (they are rejected).
+terminal_path: C:/MT5_verify/terminal64.exe
+# data_dir defaults to the terminal folder (portable mode)
+common_files_dir: C:/Users/YOUR_NAME/AppData/Roaming/MetaQuotes/Terminal/Common/Files
+start_timeout_sec: 300   # F7: the start line appears before tick history download
+run_timeout_sec: 3600    # F7: first runs may download years of ticks
+poll_interval_sec: 1.0

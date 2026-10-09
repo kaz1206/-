@@ -1,0 +1,6 @@
+# Holdout (OOS) definition, in broker SERVER dates. Pinned on first use per workspace:
+# changing this file afterwards makes every run in that workspace fail (P1_PLAN §2.4).
+holdout_from: 2024-07-01
+holdout_to: 2026-06-30
+embargo_days: 10
+note: "P1 default partition; review before real research"

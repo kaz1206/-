@@ -1,0 +1,8 @@
+strategy_name: RL_SmokeTest
+expert: RobustLab\RL_SmokeTest          # under MQL5\Experts, without .ex5
+mq5_path: ../../mql5/Experts/RobustLab/RL_SmokeTest.mq5
+telemetry_version: "1"
+inputs:
+  - {name: InpFastPeriod, type: int}
+  - {name: InpSlowPeriod, type: int}
+  - {name: InpLots, type: double}
