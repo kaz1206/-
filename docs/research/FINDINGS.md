@@ -160,18 +160,27 @@
 
 公式ページが本環境から読めなかったため、以下は**実装前に原ページと実機で確認**し、結果を本ファイルに追記する。
 
-- [ ] `[Tester]` の全キーと値の対応（特に `Model`: 0=全ティック, 1=M1 OHLC, 2=始値のみ, 3=数学計算, 4=リアルティック、という対応 — 現状は第三者情報）[S-MT5START] V
-- [ ] `ExecutionMode`（遅延）の値の意味と、ランダム遅延の指定方法 V
-- [ ] `Optimization` の値（0/1/2/3）と `ForwardMode` の現行仕様 [S-MT5B430] V
-- [ ] `Report` の保存先（端末データフォルダからの相対パスか）と拡張子の自動付与 V
-- [ ] `ShutdownTerminal=1` 使用時の終了コード（`[Tester]` の場合） V
+- [x] `Model`: **4 = リアルティック、1 = M1 OHLC を実機で確認**（0/2/3 は未確認）[S-HW-P1]
+- [ ] `ExecutionMode`（遅延）の値の意味と、ランダム遅延の指定方法 V（P1 は 0 のみ使用。後回し）
+- [~] `Optimization=0` で単一テストになることは確認 [S-HW-P1]。1/2/3 と `ForwardMode` は未確認 V
+- [x] `Report` は端末データフォルダ（ポータブルではインストール先）直下に `.htm`（UTF-16LE）＋PNG 4 枚。UI 言語で出力される [S-HW-P1]
+- [x] `[Tester] ShutdownTerminal=1` で自動終了、終了コード 0 [S-HW-P1]
 - [ ] `FrameAdd` で送れる 1 フレームのサイズ上限（日次損益 × 年数 × 8 バイトが収まるか） V
-- [ ] `FILE_COMMON` への書き込みがローカルエージェントで可能か（リモート/クラウドエージェントでは使えないはず） V
-- [ ] `Tester/cache` の再利用条件と、削除による完全再実行 V
+- [x] ローカルエージェントから `FILE_COMMON`（`%APPDATA%\MetaQuotes\Terminal\Common\Files`）に書ける [S-HW-P1]
+- [x] 単一テストは同条件の再実行でも EA が実際に再実行される（キャッシュで省略されない）[S-HW-P1]
 - [ ] 単一テストと、最適化の同じパスとで結果が一致するか（Real ticks、遅延 0） V
 - [ ] `OnTester` の戻り値を、カスタム最適化基準として XML に出力できるか V
 
 ---
+
+### 3.1 P1 実機確認の結果（2026-10-09）
+
+W1〜W14 の詳細と設計変更案 F1〜F8 は [verification/p1/RECORD.md](../../verification/p1/RECORD.md)。要点:
+- `.set` は UTF-16LE＋BOM で全型が正しく渡る。UTF-8（BOM なし）は ANSI として読まれ、非 ASCII が化ける
+- `ToDate` はテスト期間に含まれない（半開区間）。時刻はサーバ時刻。テスター内の `TimeGMT()` もサーバ時刻を返す
+- `OnDeinit` で全約定（テスト終了時の強制決済 = magic 0, comment `end of test` を含む）と `TesterStatistics` が取れる
+- 端末ログに開始行 `automatic testing started` と結果行 `last test passed with result "successfully finished"`（UI 言語によらず英語）
+- 実行中に LiveUpdate が新ビルドをダウンロードする（ビルドが自動で変わりうる）
 
 ## 4. ライブラリの現行版（PyPI, 2026-10-08）[S-PYPI-VERS]
 

@@ -42,6 +42,8 @@
 | S-PYPI-VERS | PyPI JSON API（2026-10-08 時点） | 各ライブラリの最新版（`FINDINGS.md` §4） | **A** |
 | S-PYPI-VERS2 | PyPI JSON API（2026-10-08、P1 実機確認フェーズで追加確認） | PyYAML 6.0.3（2025-09-25, ≥3.8）、uv 0.12.23（2026-10-03）、pyarrow 25.0.1 の Parquet は `created_by` にライブラリのバージョンを埋め込む（本環境で実測） | **A** |
 
+| S-HW-P1 | 実機確認（2026-10-09）: Windows 11、MT5 build 6230（ポータブル）、MetaQuotes-Demo、検証 EA `RL_Verify_P1`。記録は `verification/p1/RECORD.md` | `/config` 起動、`.set` 形式、Model 対応、Report/ログの場所と文字コード、`FILE_COMMON`、`OnDeinit` での約定・統計の取得、期間の包含関係、再実行の挙動 | **A**（実機観測） |
+
 ## 2. 原著論文・学術資料
 
 | ID | 書誌情報 | 用途 | レベル |
