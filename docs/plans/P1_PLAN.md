@@ -1,6 +1,6 @@
 # P1 実装計画: MT5 単一バックテストの安全な実行と再現可能な保存
 
-- 状態: **承認済み（2026-10-08）→ 実機確認フェーズ中**。手順と記録は `verification/p1/`（[RECORD.md](../../verification/p1/RECORD.md)）。本実装は、実機確認の結果を設計に反映してから着手する。
+- 状態: **実装中（2026-10-09〜）**。実機確認（`verification/p1/RECORD.md`）完了。設計変更 E1・F1〜F8・D1〜D8 は承認済みで、設計書に反映済み（C18〜C34）。**本文と §15 の「確定事項」が食い違う場合は §15 を優先する**
 - 作成日: 2026-10-08
 - 前提として確認した文書: `docs/ARCHITECTURE.md` v0.2、`docs/research/FINDINGS.md`、`docs/research/SOURCES.md`、`docs/DESIGN_CHANGELOG.md`、`CLAUDE.md`
 - リポジトリの現状: コードは 0 行。ドキュメントのみ（上記 5 ファイル＋`README.md`）。再利用できる既存実装はない。
@@ -329,3 +329,20 @@ rlab backtest run configs/requests/<request>.yaml [--rerun]
 7. `mt5/terminal.py`、`single_backtest.py`、Fake Terminal ＋ 結合テスト
 8. `cli/main.py`
 9. 実機 E2E（W13 を含む）、完了条件の確認
+
+---
+
+## 15. 実機確認後の確定事項（F1〜F8、2026-10-09 承認）
+
+本文の未確定部分は以下で確定する。
+
+| ID | 本文の箇所 | 確定内容 |
+|---|---|---|
+| F1 | §2.2、§7.1 `ini_builder.py` | `.set` は UTF-16LE＋BOM・CRLF。数値・bool・enum・datetime は `名前=値\|\|値\|\|刻み\|\|値\|\|N`（刻みは int/datetime/enum/bool で 1 または 0、double で 0.1 等の任意値でよい。単一テストでは使われない）、文字列は `名前=値`。datetime は Unix 秒の整数 |
+| F2 | §2.2 整合性チェック 4、§2.3 | run の期間は半開区間 `[from_date, to_date)`（サーバ時刻）。最初のティックが from_date から `coverage_tolerance_days`（既定 7）日より後、または最後のティックが to_date の同日数より前なら `QUARANTINED`（`DATA_COVERAGE`） |
+| F3 | §3 手順 10・11 | 開始 = 端末ログ（`<データフォルダ>/logs/YYYYMMDD.log`、UTF-16LE）に `automatic testing started`。成功 = 同ログの `last test passed with result "successfully finished"` ＋ プロセス終了 ＋ 完了マーカー ＋ 整合性チェック。起動直前のファイルサイズ以降だけを読む |
+| F4 | §2.2 整合性チェック 3 | 売買約定（type 0/1）の件数 = `STAT_DEALS`、かつ売買約定の Σ(profit+commission+swap+fee) = `STAT_PROFIT`（許容 0.01）。magic で絞り込まない |
+| F5 | §2.2 実行環境メタ | spread は観測値として別記録し、銘柄仕様のハッシュに含めない。時刻はすべてサーバ時刻 |
+| F6 | D2、§13-4 | `--rerun` の比較で前回とビルドが違えば「比較不能（ビルド変更）」。`backtest show` で job ごとのビルドを並べる |
+| F7 | §4 `terminal.yaml` | `run_timeout_sec` 既定 3600、`start_timeout_sec` 既定 300 |
+| F8 | §5 | ログ artifacts には口座番号と接続元 IP が含まれる。CLI はログ本文を表示しない（パスとハッシュのみ） |

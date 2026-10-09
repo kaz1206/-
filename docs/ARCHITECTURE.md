@@ -1,6 +1,6 @@
 # MT5 EA ロバスト性評価基盤 — アーキテクチャ設計書
 
-- 版: v0.2（設計のみ・コードなし）— v0.2 で一次情報・原著研究のレビューを反映。変更点は [DESIGN_CHANGELOG.md](DESIGN_CHANGELOG.md)、根拠は [research/FINDINGS.md](research/FINDINGS.md) と [research/SOURCES.md](research/SOURCES.md)。本文中の `[S-xxx]` は情報源 ID、`(C#)` は変更番号
+- 版: v0.3 — v0.2 で一次情報・原著研究のレビューを反映。v0.3 で P1 計画の不整合（D1〜D8）、再現性の比較方式（E1）、実機確認の結果（F1〜F8、[verification/p1/RECORD.md](../verification/p1/RECORD.md)）を反映（C18〜C34）。変更点は [DESIGN_CHANGELOG.md](DESIGN_CHANGELOG.md)、根拠は [research/FINDINGS.md](research/FINDINGS.md) と [research/SOURCES.md](research/SOURCES.md)。本文中の `[S-xxx]` は情報源 ID、`(C#)` は変更番号
 - 対象: MT5 Strategy Tester をバックテストエンジンとして使い、EA のロバスト性・過学習耐性・DD/破産リスクを体系的に評価し、最終的に資金配分まで決定する研究基盤
 
 ---
@@ -274,6 +274,9 @@ strategy_version
   param_schema_json
 
 environment                         -- 実行環境（再現性の核）
+  -- (C19) 実行前に決まる「依頼したテスター設定」（ID に含める）と、
+  --       実行後に分かる「観測した環境」（端末ビルド・サーバ・銘柄仕様。job に記録）に分ける。
+  --       銘柄仕様の照合ハッシュに spread（実行ごとに変わる観測値）は含めない (C31)
   env_id (PK = hash(下記)), terminal_build, broker_server, account_currency,
   deposit, leverage, tick_model{REAL_TICKS,EVERY_TICK,OHLC_M1,OPEN_PRICES},
   execution_delay_ms, symbol_spec_snapshot_hash, cost_model_json
@@ -481,7 +484,7 @@ OOS の価値は「一度でも選抜に影響したら失われる」ため、*
 ### 7.2 Holdout Guard（技術的ガード）
 
 1. **Study 凍結時に Holdout 期間を確定**し、`config_hash` に含める。凍結後は期間変更不可（変更＝新 Study）。
-2. **全ジョブは JobBuilder を通る**。JobBuilder は `[from, to]` と Holdout 期間（＋embargo）の交差を検査し、`stage_purpose != OOS` なら **例外で拒否** し `holdout_access_log` に `approved=false` で記録。
+2. **全ジョブは JobBuilder を通る**。JobBuilder は `[from, to]` と Holdout 期間（＋embargo）の交差を検査し、`stage_purpose != OOS` なら**正常な判定結果として拒否**し（例外ではない。§15.1 の `GUARD` と同じ扱い。CLI の終了コードは 3）、`holdout_access_log` に `approved=false` で記録 (C24)。交差判定は、MT5 の ToDate が「含まない」ことに関係なく閉区間で保守的に行う (C28)。
 3. **データアクセス層も同様にフィルタ**: レジーム判定や相関計算のために価格データを Python 側で読む場合も、Holdout 区間はマスクされた状態でしか取得できない。
 4. **OOS 実行の手順**:
    1. ⑦を通過した候補から OOS マニフェスト（候補 ID リスト＋事前予測帯）を作成しロック（`manifest_hash`）。
@@ -504,7 +507,7 @@ OOS の価値は「一度でも選抜に影響したら失われる」ため、*
 
 | ID | 生成規則 | 性質 |
 |---|---|---|
-| `strategy_version_id` | `sv_` + sha256(ex5 バイナリ ＋ mq5 ソース ＋ telemetry_version) 先頭 16 桁 | EA コードが 1 文字でも変われば別戦略版。旧結果を新コードに流用しない |
+| `strategy_version_id` | `sv_` + sha256(ex5 バイナリ ＋ mq5 ソース ＋ telemetry_version) 先頭 16 桁。**mq5 は任意**（ソース非公開の EA は mq5 = null、`source_available=false` を記録）(C20) | EA コードが 1 文字でも変われば別戦略版。旧結果を新コードに流用しない |
 | `candidate_id` | `cd_` + sha256(正規化 JSON{strategy_version_id, symbol, timeframe, params}) 先頭 16 桁 | **決定的**: 同じ組み合わせなら必ず同じ ID。重複実行を自動で検出 |
 | `run_id` | `rn_` + sha256(candidate_id, period_id, env_id, cost_scenario, source) | 同上 |
 | `job_id` / `spec_hash` | spec_hash = sha256(正規化 BacktestJobSpec) | 冪等実行のキー |
@@ -513,6 +516,8 @@ OOS の価値は「一度でも選抜に影響したら失われる」ため、*
 **パラメータ正規化ルール**（ID の決定性に必須）:
 - キーをアルファベット順にソート、数値は型を固定（int は int、double は有効桁を決めて丸めた文字列表現）、bool/enum は正規表現に統一。
 - 「最適化対象外だが既定値で動くパラメータ」も含めて**全パラメータ**を記録（後で既定値が変わっても区別できる）。
+- ただし `RL_` で始まる入力（job_id など Telemetry 用のハーネス入力）は candidate_id の計算から除外する（含めると実行ごとに ID が変わる）(C21)。
+- P1（Study・期間テーブルがない段階）の `run_id` は `rn_` + sha256(candidate_id, from_date, to_date, 依頼したテスター設定のハッシュ, cost_scenario, source)。期間は**半開区間 `[from_date, to_date)`（ブローカーサーバ時刻）**として記録する (C19, C28)。
 
 人間向けには `alias`（例: `MAcross_v3_EURUSD_H1_#0421`）も付けるが、照合は必ずハッシュ ID で行う。
 
@@ -812,17 +817,20 @@ lot = floor_to_lot_step( f_final × Equity / RiskPerLot )
 
 **結論**: テスター制御は ini/コマンドライン方式、計測は MQL5 テレメトリ、周辺情報と実運用は Python API、の三本立て。
 
+- P1 では Python API を使わない（実行環境はテレメトリが「テスターが実際に使った値」として出力する）。将来 Python API とテスター起動を併用する場合は、同じポータブル端末を取り合わないよう別インスタンスにするか実行順序を決める (C23)。
+- 実機確認（2026-10-09, build 6230）で、ini は ASCII で通り、`Expert=` は `MQL5\Experts` からの相対パス（拡張子なし）で認識されることを確認 [S-HW-P1]。
+
 ### 14.2 ini の主要項目と方針
 
 | 項目 | 方針 |
 |---|---|
-| `Expert`, `ExpertParameters`（.set） | .set は Generation が生成。最適化時は `値||開始||ステップ||終了||Y/N` 形式 |
+| `Expert`, `ExpertParameters`（.set） | .set は `MQL5\Profiles\Tester\` に置き、ファイル名で指定する。**文字コードは UTF-16LE＋BOM、改行 CRLF**。数値・bool・enum・datetime は `値||開始||ステップ||終了||Y/N` 形式（単一テストでは開始=終了=値、N）、文字列は `name=value`。datetime は Unix 秒の整数。**UTF-8 は ANSI として読まれ非 ASCII が化けるので使わない** (C27) [S-HW-P1] |
 | `Symbol`, `Period` | 候補定義から |
-| `Model` | 探索: `1 minute OHLC` 可 ／ ⑦以降: **`Every tick based on real ticks` 必須**。異なるモデルの結果は比較しない（`MODEL_MISMATCH`） |
+| `Model` | 探索: `1 minute OHLC` 可 ／ ⑦以降: **`Every tick based on real ticks` 必須**。異なるモデルの結果は比較しない（`MODEL_MISMATCH`）。実機で確認済みの対応: **4 = リアルティック、1 = 1 分足 OHLC**（0/2/3 は未確認）[S-HW-P1] |
 | `ExecutionMode` | 遅延（ms）。⑦以降は現実的遅延 or ランダム遅延 |
 | `Optimization` | 0=単一 / 1=完全 / 2=遺伝的。MVP は 1 推奨。**3（全銘柄モード）は使用禁止**（build 6061 で XML が空になるという報告がある (C15) [S-COMM-6061]）。値の対応は実機で確認する（[FINDINGS §3](research/FINDINGS.md)） |
 | `OptimizationCriterion` | カスタム（`OnTester` の戻り値）を使う場合はテレメトリ側で定義 |
-| `FromDate`, `ToDate` | Holdout Guard 通過後の値のみ |
+| `FromDate`, `ToDate` | Holdout Guard 通過後の値のみ。**FromDate は含み、ToDate は含まない**（半開区間）。日時はブローカーサーバ時刻（テスター内の `TimeGMT()` もサーバ時刻を返すため、GMT オフセットはテスター内から得られない）(C28, C31) [S-HW-P1] |
 | `ForwardMode` | **0（無効）固定**。期間管理は本基盤が行う（MT5 のフォワードを使うと最適化時点で将来期間の結果を見てしまう） |
 | `Deposit`, `Currency`, `Leverage` | Environment から。グリッド系は実運用想定の資金で（証拠金問題を隠さないため） |
 | `Report`, `ReplaceReport=1`, `ShutdownTerminal=1` | ジョブ固有パスに出力 |
@@ -840,8 +848,8 @@ lot = floor_to_lot_step( f_final × Equity / RiskPerLot )
 | 観点 | 設計 |
 |---|---|
 | **テスト開始** | (1) Holdout Guard 検査 → (2) ini/.set 生成（ジョブ専用ディレクトリ）→ (3) EA の .ex5 ハッシュ照合（意図した版か）→ (4) 出力先の古いファイル削除 → (5) `terminal64.exe /portable /config:…` を起動し PID を記録、状態 RUNNING |
-| **開始検知** (C14) | 起動後、一定時間内にテスターログへテスト開始行が出なければ `FAILED_TO_START`（「端末は起動するがテストが始まらない」という報告がある [S-FORUM-BATCH]）。プロセスを終了させてから分類する |
-| **完了検知** | 3 条件の AND: ① プロセス終了、② レポートファイルが存在し解析可能、③ **Telemetry 完了マーカー**（`OnTesterDeinit`/`OnDeinit` で書く「完了・パス数・チェックサム」ファイル）。最適化は「期待パス数 = 実パス数」も確認 |
+| **開始検知** (C14, C29) | 起動後、一定時間内に**端末ログ**（`<データフォルダ>\logs\YYYYMMDD.log`、UTF-16LE、タブ区切り、日付ごとの追記型）へ `automatic testing started` が出なければ `FAILED_TO_START`。ログは起動直前のファイルサイズ以降だけを読む（日付をまたいだら翌日のファイルも読む）。本文は UI 言語によらず英語 [S-HW-P1] |
+| **完了検知** | 単一テスト (C22, C29): ① プロセス終了、② 端末ログの `last test passed with result "successfully finished"`、③ **Telemetry 完了マーカー**、④ 整合性チェック合格、の AND。HTML レポートは解析しない（存在すれば原本として保存するだけ。UI 言語で出力されるため解析に不向き）。終了コードは 0 でも成功の根拠にしない。最適化（将来）は ①③ ＋ XML の存在と「期待パス数 = 実パス数」 |
 | **結果取得** | Collection が XML/HTML とテレメトリ（共通フォルダ `FILE_COMMON` 配下のジョブ別ファイル）を読み取り、Artifact Store にコピー＆ハッシュ化 |
 | **タイムアウト** | ジョブごとに推定時間（過去の 1 パス平均 × パス数 × 安全係数）から上限を設定。加えて**ハートビート**（テスターログ・エージェントログの更新時刻）が一定時間止まったらハング判定。超過時はプロセスツリーごと強制終了（psutil）→ `TIMED_OUT` |
 | **異常終了** | 終了コード、レポート欠如、ログ中のエラーパターン（"no history", "cannot load", "stopped", "critical error" 等の分類辞書）で `error_class` を判定。リトライ可否は §15 |
@@ -850,6 +858,8 @@ lot = floor_to_lot_step( f_final × Equity / RiskPerLot )
 | **キャッシュ** | MT5 は最適化結果を `Tester/cache` に保存し、同一条件の再実行をスキップすることがある。再現性確認ジョブでは**キャッシュを削除**して実行、通常ジョブでは本基盤の spec_hash で重複を防ぐ |
 
 ### 14.5 再現性のために記録するもの
+
+（C25, C32）P1 では価格履歴のチェックサムは取らず、代わりにテレメトリが観測した最初・最後のティック時刻、ティック数、バー数を簡易の指紋として記録する。また、**MT5 は実行中に新ビルドを自動ダウンロードし、再起動時にビルドが変わりうる**ことを実機で観測したので、ジョブごとに観測ビルドを記録し、ビルドの異なるジョブ同士の再現性比較は「比較不能」として扱う（不一致を失敗にしない）。
 
 端末ビルド番号、ブローカーサーバ名、銘柄仕様スナップショット（契約サイズ・ティック価値・スワップ・手数料・取引時間）、ティックモデル、遅延、初期資金・レバレッジ・通貨、EA の mq5/ex5 ハッシュ、Telemetry バージョン、ini/.set 原本、**価格履歴のチェックサム**（Python API で期間内の M1 足または日足を取得してハッシュ化。ブローカーが履歴を修正した場合に検知するため）。
 
@@ -862,7 +872,7 @@ EA に 1 行 `#include` するだけで以下を提供する共通部品（EA �
 | 機能 | 内容 | 用途 |
 |---|---|---|
 | 日次エクイティ記録 | 日足確定ごとに残高・エクイティ・含み損益・証拠金維持率・ポジション数 | Sharpe 再計算、相関、ポートフォリオ MC |
-| 取引記録 | 約定ごとの時刻・方向・ロット・価格・損益・手数料・スワップ・MAE/MFE | Bootstrap、コストストレス、利益集中度 |
+| 取引記録 | 約定ごとの時刻・方向・ロット・価格・損益・手数料・スワップ・MAE/MFE。P1 は `OnDeinit` で `HistorySelect`→`HistoryDealGet*` により全約定を取得（実機で確認）。**テスト終了時の強制決済は magic=0・comment=`end of test` なので、magic で絞り込まない** (C30) | Bootstrap、コストストレス、利益集中度。整合性チェック: 売買約定の件数 = `STAT_DEALS`、売買約定の Σ(profit+commission+swap+fee) = `STAT_PROFIT` |
 | 最大含み損・最大ポジション・最小証拠金維持率 | ティックごとに更新 | グリッド系リスク評価 |
 | 最適化パスごとの送信 | `OnTester` で `FrameAdd` により日次損益系列を送信し、端末側の `OnTesterPass` で受信する。**`OnTesterDeinit` で最後に `FrameNext` ループを回して遅れて届いたフレームも回収**してからファイルに出力する [S-MQL5BOOK-FRAME] | DSR の正確化、PBO、StepM/SPA |
 | 単一テストの出力 (C13) | **テスターイベント（`OnTesterInit/Pass/Deinit`）と Frames は最適化時のみ動き、単一テストでは使えない** [S-MQL5BOOK-TESTER]。単一テストでは `OnDeinit` で `FILE_COMMON` に直接書き出す [S-MQL5BOOK-FILES]。ファイル名には入力パラメータで渡した**ジョブ ID とパス番号を必ず含める**（複数エージェントの同名ファイル衝突を防ぐ） | 単一テストの取引・日次エクイティ |
@@ -1061,7 +1071,7 @@ rlab ledger  <strategy_family>            # 試行回数台帳
 
 ### 19.2 再現性テスト
 
-- 同一 `spec_hash` を MT5 キャッシュ削除後に 2 回実行し、取引リストのハッシュが一致することを確認（Real ticks・遅延 0 の条件で）。ランダム遅延モードでは一致しないため、統計的同等性で判定。
+- 同一 `spec_hash` を 2 回実行し、**正規化した約定データの内容ハッシュ**（列順・行順・数値表現を固定した正規化 CSV の sha256）が一致することを確認（Real ticks・遅延 0 の条件で）。Parquet ファイルのバイト列は書き込みライブラリのバージョンや圧縮設定で変わるので比較に使わない (C26)。ランダム遅延モードでは一致しないため、統計的同等性で判定。端末ビルドが異なる場合は比較不能とする (C32)。単一テストは同条件でも EA が実際に再実行され、キャッシュ削除は不要（実機で確認）[S-HW-P1]。
 
 ### 19.3 パイプライン全体の「帰無仮説テスト」（最重要）
 
@@ -1083,9 +1093,9 @@ rlab ledger  <strategy_family>            # 試行回数台帳
 
 | フェーズ | 内容 | 完了条件（Definition of Done） |
 |---|---|---|
-| **P0 土台** | Core（ID・理由コード）、Config（スキーマ・凍結）、Storage（SQLite・Artifact・マイグレーション） | ID 決定性のプロパティテスト通過、凍結後変更が拒否される |
-| **P1 単一テスト実行** | MT5 Adapter（ini 生成・起動・完了検知・タイムアウト・ログ収集）、Fake Terminal、Holdout Guard | 手動で 1 本の単一テストを CLI から実行し、ジョブ状態・ログが記録される。Holdout 違反が拒否される |
-| **P2 Telemetry と指標** | Telemetry.mqh（日次エクイティ・取引・最大含み損・完了マーカー・固定ロット）、Collection、MetricEngine | 自前指標と MT5 原値の差異が説明可能な範囲。期間別パフォーマンスが出る |
+| **P0 土台** | Core（ID・理由コード）、Config（スキーマ・凍結）、Storage（SQLite・Artifact・マイグレーション）。**P1 に必要な最小限（ID・保存・分割定義の固定）は P1 で先に実装する** (C18) | ID 決定性のプロパティテスト通過、凍結後変更が拒否される |
+| **P1 単一テスト実行** | MT5 Adapter（ini 生成・起動・開始/完了検知・タイムアウト・ログ収集）、Fake Terminal、Holdout Guard（最小版）、**Telemetry の終了時出力（約定・統計・実行環境・完了マーカー）** (C18)。詳細は [plans/P1_PLAN.md](plans/P1_PLAN.md) | CLI から 1 本の単一テストを実行し、整合性チェックに合格した結果だけが保存される。Holdout 違反が拒否される |
+| **P2 Telemetry と指標** | Telemetry.mqh の拡張（日次エクイティ・最大含み損・最大ポジション・固定ロット）、Collection、MetricEngine | 自前指標と MT5 原値の差異が説明可能な範囲。期間別パフォーマンスが出る |
 | **P3 最適化と収集** | 最適化ジョブ（完全グリッド・チャンク分割）、XML 取込、Trial Ledger | 1,000 パス規模の最適化を取込み、期待パス数と一致 |
 | **P4 フィルタ** | 戦略プロファイル、PSR ゲート、全ゲート記録 | `why-not` で全除外理由が表示される |
 | **P5 ロバストネス** | 近傍統計・Robust Score・Region・コストストレス（事後）・サブ期間・利益集中 | 合成データで孤立ピークを選ばないことを確認 |
