@@ -1,6 +1,5 @@
 import codecs
 import datetime as dt
-
 import io
 
 import pyarrow.parquet as pq
@@ -9,8 +8,14 @@ import pytest
 from robustlab.core.models import InputSpec, InputType, JobStatus, TickModel
 from robustlab.core.models import TesterSettings as _Settings
 from robustlab.core.params import normalize_params
-from robustlab.mt5 import ini_builder, telemetry_reader as tr
-from tests.telemetry_factory import FIXTURE_DEALS, env_doc, stats_values, write_telemetry
+from robustlab.mt5 import ini_builder
+from robustlab.mt5 import telemetry_reader as tr
+from tests.telemetry_factory import (
+    FIXTURE_DEALS,
+    env_doc,
+    stats_values,
+    write_telemetry,
+)
 
 JOB = "jb_20261009120000000_abcdef01"
 TESTER = _Settings(model=TickModel.REAL_TICKS, deposit=10000, currency="USD", leverage=100)
@@ -56,7 +61,7 @@ def test_ini_is_ascii_without_credentials():
     assert lines[0] == "[Tester]" and "Model=4" in lines and "FromDate=2023.01.09" in lines
     assert "ToDate=2023.01.13" in lines and "Deposit=10000" in lines and "ShutdownTerminal=1" in lines
     assert "Optimization=0" in lines and "ForwardMode=0" in lines and "UseCloud=0" in lines
-    assert not any(l.lower().startswith(("login", "password", "server")) for l in lines)
+    assert not any(line.lower().startswith(("login", "password", "server")) for line in lines)
 
 
 @pytest.mark.parametrize("bad", ["[Common]\r\nLogin=1\r\n", "[Tester]\r\nPassword=x\r\n", "[Tester]\r\nExpert=é\r\n"])

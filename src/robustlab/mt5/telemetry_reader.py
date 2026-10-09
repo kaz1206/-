@@ -92,7 +92,7 @@ def _read_deals(path: Path) -> list[dict[str, str]]:
             continue
         if len(rec) != len(DEALS_COLUMNS):
             raise ValueError(f"deals line {i}: expected {len(DEALS_COLUMNS)} fields, got {len(rec)}")
-        rows.append(dict(zip(DEALS_COLUMNS, rec)))
+        rows.append(dict(zip(DEALS_COLUMNS, rec, strict=True)))
     return rows
 
 

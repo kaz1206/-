@@ -2,7 +2,12 @@ import textwrap
 
 import pytest
 
-from robustlab.config.loader import ConfigError, load_partition, load_request, load_terminal_config
+from robustlab.config.loader import (
+    ConfigError,
+    load_partition,
+    load_request,
+    load_terminal_config,
+)
 
 
 def write(p, text):

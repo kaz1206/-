@@ -44,6 +44,7 @@ class JobStatus(str, enum.Enum):
     TELEMETRY_MISSING = "TELEMETRY_MISSING"
     QUARANTINED = "QUARANTINED"
     ABANDONED = "ABANDONED"
+    INTERNAL_ERROR = "INTERNAL_ERROR"  # unexpected exception in rlab after the job was created
 
 
 class InputType(str, enum.Enum):

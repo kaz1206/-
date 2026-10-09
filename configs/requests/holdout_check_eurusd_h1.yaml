@@ -1,0 +1,8 @@
+# Must be REJECTED by the Holdout Guard (exit code 3) without starting MT5. Used in the P1 E2E check.
+strategy_file: ../strategies/rl_smoketest.yaml
+symbol: EURUSD
+timeframe: H1
+from_date: 2025-01-06
+to_date: 2025-02-03
+params: {InpFastPeriod: 12, InpSlowPeriod: 48, InpLots: 0.01}
+tester: {model: REAL_TICKS, execution_delay_ms: 0, deposit: 10000, currency: USD, leverage: 100}

@@ -3,7 +3,6 @@ import json
 from typer.testing import CliRunner
 
 from robustlab.cli.main import app
-from tests.integration.test_single_backtest import env  # noqa: F401  (fixture)
 
 runner = CliRunner()
 

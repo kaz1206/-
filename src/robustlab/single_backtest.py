@@ -11,7 +11,13 @@ from typing import Any
 
 import psutil
 
-from robustlab.config.loader import ConfigError, LoadedRequest, load_partition, load_request, load_terminal_config
+from robustlab.config.loader import (
+    ConfigError,
+    LoadedRequest,
+    load_partition,
+    load_request,
+    load_terminal_config,
+)
 from robustlab.core import ids
 from robustlab.core.models import JobStatus, TerminalConfig
 from robustlab.core.params import ParamError, normalize_params
@@ -160,7 +166,7 @@ def run_backtest(
 
 def _run(ws: Workspace, cfg: TerminalConfig, partition, partition_hash: str, lr: LoadedRequest,
          normalized: dict, rerun: bool) -> Outcome:
-    db, store, rq, st = ws.db, ws.store, lr.request, lr.strategy
+    db, rq, st = ws.db, lr.request, lr.strategy
     sweep_abandoned(db)
 
     # 2. preflight (MT5 is not started on failure)
@@ -197,6 +203,17 @@ def _run(ws: Workspace, cfg: TerminalConfig, partition, partition_hash: str, lr:
         "spec_json": ids.canonical_json(spec), "attempt_no": attempt, "status": JobStatus.PREPARING.value,
         "terminal_path": str(cfg.terminal_path), "created_at": now_iso(),
     })
+    try:
+        return _execute(ws, cfg, lr, normalized, job_id, attempt, sv, cd, rn, settings)
+    except Exception as e:  # never leave a job RUNNING, never treat it as a success
+        db.update_job(job_id, status=JobStatus.INTERNAL_ERROR.value, finished_at=now_iso(),
+                      error_class=JobStatus.INTERNAL_ERROR.value, error_detail=f"{type(e).__name__}: {e}")
+        return Outcome(EXIT_RUNTIME, JobStatus.INTERNAL_ERROR.value, f"{type(e).__name__}: {e}", rn, job_id)
+
+
+def _execute(ws: Workspace, cfg: TerminalConfig, lr: LoadedRequest, normalized: dict, job_id: str,
+             attempt: int, sv: str, cd: str, rn: str, settings: dict) -> Outcome:
+    db, store, rq, st = ws.db, ws.store, lr.request, lr.strategy
     job_dir = ws.jobs_dir / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
 

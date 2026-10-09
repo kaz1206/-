@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-現在は設計段階（コードなし）。
+P1（MT5 単一バックテストの安全な実行と再現可能な保存）を実装済み。実機 E2E は `docs/runbooks/P1_E2E.md`。
 
 ## 主要ドキュメント
 
@@ -9,6 +9,7 @@ MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
+- P1 計画（§15 が確定事項）: `docs/plans/P1_PLAN.md`、実機確認の記録: `verification/p1/RECORD.md`
 
 ## 調査ポリシー（設計・実装の前に必ず守る）
 
@@ -45,3 +46,17 @@ MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破
 - MT5 と MetaTrader5 Python パッケージは **Windows 専用**。Python は 3.12/3.13。
 - 統計・評価の中核ロジックは MT5 に依存させず、Linux でも単体テストできる構成にする。
 - Claude Code のクラウド環境では `mql5.com` / `metatrader5.com` 等へのアクセスがブロックされることがある。その場合は確認レベルを B/C として記録し、`docs/research/FINDINGS.md` §3 の実機確認チェックリストに回す。
+
+## コマンド
+
+- 依存関係: `uv sync`（ロックファイル `uv.lock`。Python 3.12/3.13）
+- テスト: `uv run pytest`（Linux で全テストが動く。MT5 は偽の端末 `tests/integration/fake_terminal.py` で代替）
+- CLI: `uv run rlab backtest run <request.yaml> [--rerun]` / `rlab backtest show <run_id>` / `rlab jobs list`
+- 終了コード: 0 成功、1 設定・入力エラー、2 実行時の失敗、3 Holdout Guard による拒否
+
+## 実装上の約束（P1）
+
+- `verification/` は実機確認専用。P1 本体（`src/`、`mql5/`）から参照しない。
+- `.set` は UTF-16LE＋BOM、ini は ASCII（実機で確認した形式。変更する場合は実機確認から）。
+- 成功の判定は「端末ログの成功行＋完了マーカー＋整合性チェック」のすべて。どれかが欠けたら SUCCEEDED にしない。
+- `workspace/` のログには口座番号と IP が含まれる。CLI でログ本文を表示しない。リポジトリにコミットしない。

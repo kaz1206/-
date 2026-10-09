@@ -1,6 +1,6 @@
 # P1 実装計画: MT5 単一バックテストの安全な実行と再現可能な保存
 
-- 状態: **実装中（2026-10-09〜）**。実機確認（`verification/p1/RECORD.md`）完了。設計変更 E1・F1〜F8・D1〜D8 は承認済みで、設計書に反映済み（C18〜C34）。**本文と §15 の「確定事項」が食い違う場合は §15 を優先する**
+- 状態: **実装完了・実機 E2E 待ち（2026-10-09）**。手順は `docs/runbooks/P1_E2E.md`。実機確認（`verification/p1/RECORD.md`）完了。設計変更 E1・F1〜F8・D1〜D8 は承認済みで、設計書に反映済み（C18〜C34）。**本文と §15 の「確定事項」が食い違う場合は §15 を優先する**
 - 作成日: 2026-10-08
 - 前提として確認した文書: `docs/ARCHITECTURE.md` v0.2、`docs/research/FINDINGS.md`、`docs/research/SOURCES.md`、`docs/DESIGN_CHANGELOG.md`、`CLAUDE.md`
 - リポジトリの現状: コードは 0 行。ドキュメントのみ（上記 5 ファイル＋`README.md`）。再利用できる既存実装はない。
@@ -346,3 +346,15 @@ rlab backtest run configs/requests/<request>.yaml [--rerun]
 | F6 | D2、§13-4 | `--rerun` の比較で前回とビルドが違えば「比較不能（ビルド変更）」。`backtest show` で job ごとのビルドを並べる |
 | F7 | §4 `terminal.yaml` | `run_timeout_sec` 既定 3600、`start_timeout_sec` 既定 300 |
 | F8 | §5 | ログ artifacts には口座番号と接続元 IP が含まれる。CLI はログ本文を表示しない（パスとハッシュのみ） |
+
+## 16. 実装メモ（計画からの細部の補足）
+
+計画の範囲内で、実装時に決めた細部です（仕様の変更ではありません）。
+
+| 項目 | 内容 | 理由 |
+|---|---|---|
+| `INTERNAL_ERROR` 状態 | job 作成後に rlab 内部で想定外の例外が起きた場合（起動失敗など）、job を `INTERNAL_ERROR` で閉じる | job を `RUNNING` のまま残さず、成功扱いにもしないため（§6 の表に 1 行追加） |
+| 後片付け | job が作った端末側のファイル（`.set`、Common の `RL_<job>_*`、`RL_<job>_report*`）は、artifacts に保存した後に削除する。ログは端末側に残す（追記型の共有ファイルのため、該当区間だけを artifacts に保存） | 端末フォルダ・共有フォルダにファイルを溜めないため |
+| ログの保存単位 | 起動直前のサイズ以降に追記された区間だけを `log_segment` として保存する | 他の実行の行を混ぜないため（F3） |
+| `tester_settings_hash` | 計画どおり `terminal_path` を含める | §2.3 |
+| 期間外ティックの扱い | 最初のティックが FromDate より前、または最後のティックが ToDate 以降なら `QUARANTINED`（`PERIOD_SEMANTICS`） | 実機で確認した半開区間（F2）と違う挙動を検出するため |
