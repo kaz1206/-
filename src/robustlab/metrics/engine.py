@@ -59,6 +59,28 @@ def _streaks(pnls: list[float]) -> tuple[int, float, int, float]:
     return best_w, amt_w, best_l, amt_l
 
 
+def longest_runs(deals: list[dict[str, str]]) -> dict[str, list[dict[str, Any]]]:
+    """Every run of maximal length, for wins and for losses (diagnostics for MT5 tie-breaking)."""
+    closes = [d for d in _ordered(deals) if int(d["type"]) in (DEAL_BUY, DEAL_SELL)
+              and int(d["entry"]) in CLOSING_ENTRIES]
+    out: dict[str, list[dict[str, Any]]] = {}
+    for label, sign in (("wins", 1), ("losses", -1)):
+        runs, cur = [], []
+        for d in closes + [None]:
+            if d is not None and _pnl(d) * sign > 0:
+                cur.append(d)
+                continue
+            if cur:
+                runs.append(cur)
+            cur = []
+        best = max((len(r) for r in runs), default=0)
+        out[label] = [{"length": len(r), "amount": round(sum(_pnl(d) for d in r), 2),
+                       "first": r[0]["time"], "last": r[-1]["time"]} for r in runs if len(r) == best]
+        top = max(runs, key=lambda r: sum(_pnl(d) for d in r) * sign, default=[])
+        out[f"most_{label}_amount"] = [{"length": len(top), "amount": round(sum(_pnl(d) for d in top), 2)}] if top else []
+    return out
+
+
 def _balance_drawdown(points: list[tuple[dt.datetime, float]]) -> tuple[float, float, float]:
     """Max drawdown (abs, pct of the peak at that moment) and the longest peak-to-recovery span in days."""
     peak = points[0][1]

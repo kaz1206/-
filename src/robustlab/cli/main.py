@@ -209,5 +209,32 @@ def metrics_show(run_id: str, job: str | None = typer.Option(None, "--job", help
             typer.echo(f"  {p['bucket_key']}: net={p['net_profit']} trades={p['trades']} max_dd={p['balance_max_dd']}")
 
 
+@metrics_app.command("runs")
+def metrics_runs(job_id: str, workspace: Path = WORKSPACE) -> None:
+    """Diagnostics: every longest win/loss run of a job (read-only)."""
+    from robustlab.metrics import engine
+    from robustlab.mt5 import telemetry_reader as tr
+    from robustlab.storage.artifacts import ArtifactStore
+
+    db = _open(workspace)
+    try:
+        store = ArtifactStore(workspace.resolve() / "artifacts", db)
+        row = db.one("SELECT sha256 FROM job_artifact WHERE job_id = ? AND role = 'telemetry_deals'", (job_id,))
+        stats = db.one("SELECT sha256 FROM job_artifact WHERE job_id = ? AND role = 'telemetry_stats'", (job_id,))
+        if row is None or stats is None:
+            typer.echo(f"no telemetry for {job_id}", err=True)
+            raise typer.Exit(1)
+        deals = tr.parse_csv_text(store.read(row["sha256"]).decode("utf-8-sig"), tr.DEALS_COLUMNS, "deals")
+        mt5 = json.loads(store.read(stats["sha256"]).decode("utf-8-sig")).get("values", {})
+    finally:
+        db.close()
+    for label, runs in engine.longest_runs(deals).items():
+        typer.echo(f"{label}:")
+        for r in runs:
+            typer.echo(f"  {r}")
+    typer.echo("mt5: " + ", ".join(f"{k}={mt5.get(k)}" for k in
+                                   ("max_conwins", "max_conprofit_trades", "max_conlosses", "max_conloss_trades")))
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()

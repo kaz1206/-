@@ -74,3 +74,12 @@ def test_periods_split_by_year_and_month():
 def test_mixed_lots_are_flagged():
     ds = [_deal(1, "2023.01.02 00:00:00", 0, "0", vol="0.01"), _deal(2, "2023.01.02 01:00:00", 1, "1", vol="0.02")]
     assert engine.compute(ds, initial_deposit=100.0).metrics["fixed_lot"] is False
+
+
+def test_longest_runs_lists_every_tie():
+    ds = [_deal(1, "2023.01.02 00:00:00", 1, "1"), _deal(2, "2023.01.02 01:00:00", 1, "2"),
+          _deal(3, "2023.01.02 02:00:00", 1, "-1"),
+          _deal(4, "2023.01.02 03:00:00", 1, "5"), _deal(5, "2023.01.02 04:00:00", 1, "1")]
+    r = engine.longest_runs(ds)
+    assert [x["amount"] for x in r["wins"]] == [3.0, 6.0]
+    assert r["most_wins_amount"][0]["amount"] == 6.0 and r["losses"][0]["length"] == 1
