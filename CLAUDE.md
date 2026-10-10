@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2・指標の自前計算 MetricEngine m2）は完了（2026-10-10 実機確認合格）。P3（完全グリッド最適化・全パス取込・試行回数台帳）は実装済みで、実機 E2E（`docs/runbooks/P3_E2E.md`）待ち。
+P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2・指標の自前計算 MetricEngine m2）は完了（2026-10-10 実機確認合格）。P3（完全グリッド最適化・全パス取込・試行回数台帳）も完了（2026-10-11 実機 E2E 合格）。
 
 ## 主要ドキュメント
 
@@ -9,7 +9,7 @@ P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
-- P3 計画（承認済み、C40〜C49）: `docs/plans/P3_PLAN.md`、実機確認: `verification/p3/RECORD.md`
+- P3 計画（完了、C40〜C50）: `docs/plans/P3_PLAN.md`、実機確認: `verification/p3/RECORD.md`、E2E 手順: `docs/runbooks/P3_E2E.md`
 - P1 計画（§15 が確定事項）: `docs/plans/P1_PLAN.md`、実機確認の記録: `verification/p1/RECORD.md`
 - P2 計画: `docs/plans/P2_PLAN.md`、指標定義: `docs/metrics_definitions.md`
 
@@ -64,4 +64,5 @@ P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2
 - 成功の判定は「端末ログの成功行＋完了マーカー＋整合性チェック」のすべて。どれかが欠けたら SUCCEEDED にしない。
 - 最適化の成功は「テスターログの完了行（期待パス数）＋エージェント内訳 remote 0・cloud 0＋Frames の完了マーカーと全パス＋XML との照合」のすべて（C46〜C49）。最適化の前に対象 EA の `.opt` キャッシュを削除する。
 - EA は最適化で `INIT_PARAMETERS_INCORRECT` を返さない（そのパスはフレームを送らず欠落扱いになる）。無効な組合せは「取引しないパス」として走らせる。
+- MT5 の更新は研究のひと区切りの合間に手動で行い、比較の途中では更新しない（保留中の更新はジョブ中に自動適用され、再現性の比較が「比較対象外」になる）。
 - `workspace/` のログには口座番号と IP が含まれる。CLI でログ本文を表示しない。リポジトリにコミットしない。
