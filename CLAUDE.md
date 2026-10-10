@@ -10,6 +10,7 @@ P1（MT5 単一バックテストの安全な実行と再現可能な保存）�
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
 - P1 計画（§15 が確定事項）: `docs/plans/P1_PLAN.md`、実機確認の記録: `verification/p1/RECORD.md`
+- P2 計画: `docs/plans/P2_PLAN.md`、指標定義: `docs/metrics_definitions.md`
 
 ## 調査ポリシー（設計・実装の前に必ず守る）
 
@@ -51,7 +52,7 @@ P1（MT5 単一バックテストの安全な実行と再現可能な保存）�
 
 - 依存関係: `uv sync`（ロックファイル `uv.lock`。Python 3.12/3.13）
 - テスト: `uv run pytest`（Linux で全テストが動く。MT5 は偽の端末 `tests/integration/fake_terminal.py` で代替）
-- CLI: `uv run rlab backtest run <request.yaml> [--rerun]` / `rlab backtest show <run_id>` / `rlab jobs list`
+- CLI: `uv run rlab backtest run <request.yaml> [--rerun]` / `rlab backtest show <run_id>` / `rlab jobs list` / `rlab metrics compute <job_id|--all>` / `rlab metrics show <run_id>`
 - 終了コード: 0 成功、1 設定・入力エラー、2 実行時の失敗、3 Holdout Guard による拒否
 
 ## 実装上の約束（P1）
