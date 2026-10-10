@@ -359,3 +359,4 @@ rlab backtest run configs/requests/<request>.yaml [--rerun]
 | `tester_settings_hash` | 計画どおり `terminal_path` を含める | §2.3 |
 | 期間外ティックの扱い | 最初のティックが FromDate より前、または最後のティックが ToDate 以降なら `QUARANTINED`（`PERIOD_SEMANTICS`） | 実機で確認した半開区間（F2）と違う挙動を検出するため |
 | 絶対パス化（E2E 初回で発見） | workspace と ini のパスを絶対パスにしてから MT5 に渡す | MT5 は自分のフォルダを作業ディレクトリとして起動するため、相対パスの `/config` を解決できず、テストが始まらなかった（`FAILED_TO_START`）。回帰テストを追加 |
+| 自動アップデートの引き継ぎ（G1/G2、承認済み） | LiveUpdate の `/update` 起動行を検出したら、再起動された端末の終了まで待って判定する。同じ端末のプロセスが残っている間は判定・後片付けをしない | 実機 E2E で観測（C35/C36） |

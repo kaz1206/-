@@ -8,6 +8,10 @@ Behaviour is selected by the FAKE_MODE environment variable:
   crash          start line, exit 3, no telemetry
   bad_profit     like ok but STAT_PROFIT disagrees with the deals
   no_success     like ok but the terminal log has no success line
+  update         LiveUpdate handoff: log the /update line, relaunch itself (build 6251) with the
+                 same ini after FAKE_DELAY seconds, and exit at once (seen on hardware, G1)
+  update_none    LiveUpdate handoff line, but no relaunch
+  update_hang    LiveUpdate handoff, and the relaunched terminal hangs
 It also checks what the real terminal would need: an ASCII [Tester] ini and a
 UTF-16LE .set in MQL5/Profiles/Tester that carries RL_JobId.
 """
@@ -24,14 +28,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from tests.telemetry_factory import stats_values, write_telemetry  # noqa: E402
+import subprocess  # noqa: E402
+
+from tests.telemetry_factory import env_doc, stats_values, write_telemetry  # noqa: E402
 
 
-def log(data_dir: Path, message: str) -> None:
+def log(data_dir: Path, message: str, source: str = "Tester") -> None:
     d = data_dir / "logs"
     d.mkdir(parents=True, exist_ok=True)
     f = d / (dt.date.today().strftime("%Y%m%d") + ".log")
-    line = f"XX\t0\t{dt.datetime.now():%H:%M:%S.000}\tTester\t{message}\r\n"
+    line = f"XX\t0\t{dt.datetime.now():%H:%M:%S.000}\t{source}\t{message}\r\n"
     with open(f, "ab") as fh:
         if fh.tell() == 0:
             fh.write(codecs.BOM_UTF16_LE)
@@ -52,6 +58,20 @@ def main() -> int:
     job_id = params["RL_JobId"]
     assert (data_dir / "MQL5" / "Experts" / (kv["Expert"].replace("\\", "/") + ".ex5")).is_file()
 
+    time.sleep(float(os.environ.get("FAKE_DELAY", "0")))
+    build = int(os.environ.get("FAKE_BUILD", "6230"))
+    log(data_dir, f"MetaTrader 5 x64 build {build} started for MetaQuotes Ltd.", "Terminal")
+    if mode in ("update", "update_none", "update_hang"):
+        log(data_dir, f'start "C:\\x\\liveupdate\\terminal64.exe" /update /path:"{data_dir}" /portable /config:"{cfg}"',
+            "LiveUpdate")
+        if mode != "update_none":
+            child = {**os.environ, "FAKE_MODE": "hang" if mode == "update_hang" else "ok",
+                     "FAKE_DELAY": "0.5", "FAKE_BUILD": "6251"}
+            terminal = data_dir / "terminal64.exe"
+            # the extra argument makes the child findable by its terminal path, like the real relaunch
+            subprocess.Popen([str(terminal), "/portable", f"/config:{cfg}", "/relaunched", str(terminal)],
+                             env=child, start_new_session=True)
+        return 0
     if mode == "no_start":
         time.sleep(3600)
         return 0
@@ -65,7 +85,7 @@ def main() -> int:
     agent_logs.mkdir(parents=True, exist_ok=True)
     (agent_logs / "agent.log").write_bytes(codecs.BOM_UTF16_LE + "agent ok\r\n".encode("utf-16-le"))
     stats = stats_values(profit=9.71) if mode == "bad_profit" else None
-    write_telemetry(common, job_id, stats=stats)
+    write_telemetry(common, job_id, stats=stats, env=env_doc(job_id, terminal_build=build))
     (data_dir / f"{kv['Report']}.htm").write_bytes(codecs.BOM_UTF16_LE + "<html>report</html>".encode("utf-16-le"))
     if mode != "no_success":
         log(data_dir, 'last test passed with result "successfully finished" in 0:00:00.216')

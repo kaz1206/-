@@ -250,6 +250,9 @@ def _execute(ws: Workspace, cfg: TerminalConfig, lr: LoadedRequest, normalized: 
     )
     problems: list[str] = []
     warnings: list[str] = []
+    if outcome.updated:  # G1
+        builds = " -> ".join(str(b) for b in outcome.builds) or "unknown"
+        warnings.append(f"TERMINAL_UPDATED: MT5 updated itself during this job (builds {builds})")
     tel = None
     if outcome.kind is terminal.TerminalOutcomeKind.FAILED_TO_START:
         status = JobStatus.FAILED_TO_START

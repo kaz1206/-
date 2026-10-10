@@ -181,6 +181,8 @@ W1〜W14 の詳細と設計変更案 F1〜F8 は [verification/p1/RECORD.md](../
 - `OnDeinit` で全約定（テスト終了時の強制決済 = magic 0, comment `end of test` を含む）と `TesterStatistics` が取れる
 - 端末ログに開始行 `automatic testing started` と結果行 `last test passed with result "successfully finished"`（UI 言語によらず英語）
 - 実行中に LiveUpdate が新ビルドをダウンロードする（ビルドが自動で変わりうる）
+- （E2E, 2026-10-10）ダウンロード済みの更新は**次の起動時に適用**される。起動した端末は LiveUpdate に `/config` を引き継いで数秒で終了し、約 15 秒後に更新後の端末が同じ ini で再起動してテストを行う（C35/C36 で対応）[S-HW-P1-E2E]
+- （E2E）`/config` に相対パスを渡すと端末フォルダ基準で解決され、`cannot load config ... at start` になる。必ず絶対パスで渡す [S-HW-P1-E2E]
 
 ## 4. ライブラリの現行版（PyPI, 2026-10-08）[S-PYPI-VERS]
 

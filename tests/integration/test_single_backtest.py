@@ -164,3 +164,34 @@ def test_relative_workspace_path_works(env, monkeypatch):
     from robustlab.single_backtest import run_backtest
     out = run_backtest(env.req, env.terminal_cfg, env.partition, Path(env.ws.name))
     assert out.status == "SUCCEEDED", out
+
+
+# --- G1/G2: LiveUpdate handoff (observed on hardware, 2026-10-10) ---------------------------
+def _terminal_processes(env):
+    from robustlab.mt5.terminal import find_running
+    return find_running(env.data / "terminal64.exe")
+
+
+def test_liveupdate_handoff_is_followed_to_the_relaunched_terminal(env):
+    out = env.run("update")
+    assert out.status == "SUCCEEDED", out
+    assert out.details["observed_build"] == 6251
+    assert any(w.startswith("TERMINAL_UPDATED") and "6230 -> 6251" in w for w in out.details["warnings"])
+    assert _terminal_processes(env) == []
+
+
+def test_liveupdate_without_relaunch_fails_to_start(env):
+    out = env.run("update_none")
+    assert out.status == "FAILED_TO_START"
+    assert any(w.startswith("TERMINAL_UPDATED") for w in jobs_warnings(env))
+
+
+def test_hanging_relaunched_terminal_is_killed_before_returning(env):
+    out = env.run("update_hang")
+    assert out.status == "TIMED_OUT"
+    assert _terminal_processes(env) == []  # G2: nothing of this terminal is left running
+
+
+def jobs_warnings(env):
+    import json
+    return json.loads(jobs(env)[0]["warnings_json"])

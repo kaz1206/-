@@ -850,6 +850,7 @@ lot = floor_to_lot_step( f_final × Equity / RiskPerLot )
 | **テスト開始** | (1) Holdout Guard 検査 → (2) ini/.set 生成（ジョブ専用ディレクトリ）→ (3) EA の .ex5 ハッシュ照合（意図した版か）→ (4) 出力先の古いファイル削除 → (5) `terminal64.exe /portable /config:…` を起動し PID を記録、状態 RUNNING |
 | **開始検知** (C14, C29) | 起動後、一定時間内に**端末ログ**（`<データフォルダ>\logs\YYYYMMDD.log`、UTF-16LE、タブ区切り、日付ごとの追記型）へ `automatic testing started` が出なければ `FAILED_TO_START`。ログは起動直前のファイルサイズ以降だけを読む（日付をまたいだら翌日のファイルも読む）。本文は UI 言語によらず英語 [S-HW-P1] |
 | **完了検知** | 単一テスト (C22, C29): ① プロセス終了、② 端末ログの `last test passed with result "successfully finished"`、③ **Telemetry 完了マーカー**、④ 整合性チェック合格、の AND。HTML レポートは解析しない（存在すれば原本として保存するだけ。UI 言語で出力されるため解析に不向き）。終了コードは 0 でも成功の根拠にしない。最適化（将来）は ①③ ＋ XML の存在と「期待パス数 = 実パス数」 |
+| **自動アップデート** (C35, C36) | 起動した端末が LiveUpdate に処理を渡して（端末ログ `LiveUpdate start "...liveupdate\terminal64.exe" /update ... /config:"<ini>"`）すぐ終了し、更新後の端末が同じ ini で自動的に再起動されることがある [S-HW-P1-E2E]。この場合は失敗にせず、再起動された端末の終了まで待って通常どおり判定し、警告 `TERMINAL_UPDATED`（ビルドの推移）を記録する (C35)。また、同じ端末のプロセスが 1 つでも動いている間は判定・後片付けをしない。タイムアウト時はそれらも強制終了する (C36) |
 | **結果取得** | Collection が XML/HTML とテレメトリ（共通フォルダ `FILE_COMMON` 配下のジョブ別ファイル）を読み取り、Artifact Store にコピー＆ハッシュ化 |
 | **タイムアウト** | ジョブごとに推定時間（過去の 1 パス平均 × パス数 × 安全係数）から上限を設定。加えて**ハートビート**（テスターログ・エージェントログの更新時刻）が一定時間止まったらハング判定。超過時はプロセスツリーごと強制終了（psutil）→ `TIMED_OUT` |
 | **異常終了** | 終了コード、レポート欠如、ログ中のエラーパターン（"no history", "cannot load", "stopped", "critical error" 等の分類辞書）で `error_class` を判定。リトライ可否は §15 |

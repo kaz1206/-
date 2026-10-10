@@ -4,12 +4,18 @@
 - Start:  the terminal log gets "automatic testing started"
 - Result: the terminal log gets 'last test passed with result "successfully finished"'
 Logs are UTF-16LE, appended per day, so only bytes written after launch are read (W6).
+
+Auto-update handoff (G1/G2, found in the first hardware E2E run): the launched terminal may
+start "liveupdate\\terminal64.exe /update ... /config:<ini>" and exit at once; the updated
+terminal is then relaunched with the same ini. We keep waiting for it, and we never return
+while any process of this terminal is still running.
 """
 
 from __future__ import annotations
 
 import enum
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -20,6 +26,8 @@ import psutil
 
 START_PATTERN = "automatic testing started"
 SUCCESS_PATTERN = 'last test passed with result "successfully finished"'
+UPDATE_RE = re.compile(r"LiveUpdate\s+start\b.*?/update\b")
+BUILD_RE = re.compile(r"MetaTrader 5 x64 build (\d+) started")
 
 
 class TerminalOutcomeKind(str, enum.Enum):
@@ -37,6 +45,8 @@ class TerminalOutcome:
     succeeded_line: bool
     log_segments: dict[Path, bytes] = field(default_factory=dict)
     seconds: float = 0.0
+    updated: bool = False  # the terminal handed over to LiveUpdate during the job (G1)
+    builds: list[int] = field(default_factory=list)  # builds that started during the job, in order
 
 
 def log_dirs(data_dir: Path) -> list[Path]:
@@ -150,16 +160,31 @@ def run_terminal(
         on_launch(proc.pid)
 
     started = False
+    updated = False
+    relaunch_seen = False
+    start_deadline = t0 + start_timeout_sec
+    deadline = t0 + run_timeout_sec
     kind = TerminalOutcomeKind.EXITED
-    while proc.poll() is None:
-        elapsed = time.monotonic() - t0
-        if not started:
-            text = "".join(decode_log(b) for b in read_new_bytes(term_dir, snapshot).values())
-            started = START_PATTERN in text
-        if not started and elapsed > start_timeout_sec:
+    while True:
+        now = time.monotonic()
+        text = "".join(decode_log(b) for b in read_new_bytes(term_dir, snapshot).values())
+        started = START_PATTERN in text
+        if not updated and UPDATE_RE.search(text):
+            updated = True
+            start_deadline = now + start_timeout_sec  # give the relaunched terminal its own start window
+        own_alive = proc.poll() is None
+        others = [] if own_alive else find_running(terminal_path)
+        if not own_alive and others:
+            relaunch_seen = True
+        if not own_alive and not others:
+            # G1: after a LiveUpdate handoff, wait for the relaunched terminal unless it already finished
+            waiting_for_relaunch = updated and not relaunch_seen and SUCCESS_PATTERN not in text
+            if not (waiting_for_relaunch and now <= start_deadline):
+                break
+        if not started and now > start_deadline:
             kind = TerminalOutcomeKind.FAILED_TO_START
             break
-        if elapsed > run_timeout_sec:
+        if now > deadline:
             kind = TerminalOutcomeKind.TIMED_OUT
             break
         time.sleep(poll_interval_sec)
@@ -170,6 +195,9 @@ def run_terminal(
         proc.wait(timeout=30)
     except subprocess.TimeoutExpired:
         kill_tree(proc.pid)
+    # G2: never hand back control while any process of this terminal is alive
+    for pid in find_running(terminal_path):
+        kill_tree(pid)
 
     segments = read_new_bytes(log_dirs(data_dir), snapshot)  # agent folders may appear during the run
     term_text = "".join(decode_log(b) for p, b in segments.items() if p.parent == data_dir / "logs")
@@ -184,4 +212,6 @@ def run_terminal(
         succeeded_line=SUCCESS_PATTERN in term_text,
         log_segments=segments,
         seconds=round(time.monotonic() - t0, 3),
+        updated=updated or bool(UPDATE_RE.search(term_text)),
+        builds=[int(b) for b in BUILD_RE.findall(term_text)],
     )

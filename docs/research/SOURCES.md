@@ -44,6 +44,8 @@
 
 | S-HW-P1 | 実機確認（2026-10-09）: Windows 11、MT5 build 6230（ポータブル）、MetaQuotes-Demo、検証 EA `RL_Verify_P1`。記録は `verification/p1/RECORD.md` | `/config` 起動、`.set` 形式、Model 対応、Report/ログの場所と文字コード、`FILE_COMMON`、`OnDeinit` での約定・統計の取得、期間の包含関係、再実行の挙動 | **A**（実機観測） |
 
+| S-HW-P1-E2E | 実機 E2E（2026-10-10）: P1 本体の `rlab backtest run` を `C:\MT5_verify` で実行。端末ログ | 相対パスの `/config` は `cannot load config ... at start` で失敗する。起動時に保留中のアップデートがあると、LiveUpdate が `/update ... /config:<ini>` を引き継いで端末を終了し、約 15 秒後に更新後の端末（6230 → 6251）が同じ ini で再起動してテストを完了する | **A**（実機観測） |
+
 ## 2. 原著論文・学術資料
 
 | ID | 書誌情報 | 用途 | レベル |
