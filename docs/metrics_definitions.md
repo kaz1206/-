@@ -3,6 +3,17 @@
 実装: `src/robustlab/metrics/engine.py`（純粋関数）、照合: `src/robustlab/metrics/compare.py`。
 定義を変えたら `METRIC_DEF_VERSION` を上げ、本書に新しい版の節を追加する（古い計算結果は消さない）。
 
+## PSR の入力（P4、C53・C54）
+
+P4 の PSR ゲート（`src/robustlab/stats/psr.py`、`filtering/gates.py`）は、次の値を入力にする。いずれも m3（単一テスト）・p1（最適化パス）の日次系列の指標そのもの。
+
+- 日次リターン: **r_t = (E_t − E_{t−1}) / D**。E_t は日 t の日末エクイティ（含み損益を含む）、D は初期資金で期間中一定、E_0 = D。日はティックのあったサーバ日（土日・休場日は含まない）。ポジションがない日は r_t = 0
+- ŜR = `daily_sharpe`（平均 ÷ 標本標準偏差 ddof=1、年率化なし、無リスク金利 0）、γ̂₃ = `daily_skewness`、γ̂₄ = `daily_kurtosis`（超過でない）、n = `days`
+- PSR(SR*) = Φ((ŜR − SR*)·√(n−1) / √(1 − γ̂₃·ŜR + (γ̂₄−1)/4·ŜR²))、MinTRL = 1 + (1 − γ̂₃·ŜR + (γ̂₄−1)/4·ŜR²)·(z_p / (ŜR − SR*))²。R PerformanceAnalytics 2.1.0 と同じ式で、**尖度の項を常に使う**（R の既定値 `ignore_kurtosis = TRUE` とは違う）
+- 無効値（日数 < 2、分散 0、NaN・無限大、分母 ≤ 0）は PSR = null とし、**不合格**
+- 意味: PSR の閾値 0.95 は「真の Sharpe が SR* を上回ることを支持する」水準。**将来の利益の確率ではなく**、多数の試行から選んだことの補正（DSR、P6）も含まない
+- ロットを k 倍すると全ての r_t が k 倍になるだけなので、Sharpe・PSR はロットに依存しない
+
 ## p1（2026-10-10、最適化パス用、現行）
 
 最適化の各パス（`pass_result`）の指標。パスごとの約定一覧はないので、m2 とは入力が違う（P3_PLAN §3.4）。

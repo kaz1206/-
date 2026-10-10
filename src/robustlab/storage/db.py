@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 3  # 2: P2 metrics tables; 3: P3 optimization tables (optimization_round ... trial_ledger)
+SCHEMA_VERSION = 4  # 2: P2 metrics; 3: P3 optimization tables; 4: P4 filter_execution/evaluation/decision/reason_code
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -31,6 +31,10 @@ _APPEND_ONLY = (
     "opt_job_artifact",
     "pass_result",
     "trial_ledger",
+    "filter_execution",
+    "evaluation",
+    "decision",
+    "reason_code",
 )
 
 _DDL = """
@@ -248,6 +252,60 @@ CREATE TABLE IF NOT EXISTS trial_ledger (
     PRIMARY KEY (round_id, chunk_index)
 );
 
+CREATE TABLE IF NOT EXISTS reason_code (
+    code TEXT PRIMARY KEY,
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    severity TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS filter_execution (
+    filter_id TEXT PRIMARY KEY,
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    profile_name TEXT NOT NULL,
+    profile_hash TEXT NOT NULL,
+    profile_json TEXT NOT NULL,
+    component_name TEXT NOT NULL,
+    component_version TEXT NOT NULL,
+    input_job_ids_json TEXT NOT NULL,
+    conditions_json TEXT NOT NULL,
+    n_candidates INTEGER NOT NULL,
+    n_pass INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS filter_execution_round ON filter_execution(round_id);
+
+CREATE TABLE IF NOT EXISTS evaluation (
+    evaluation_id TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
+    stage TEXT NOT NULL,
+    evaluator_name TEXT NOT NULL,
+    evaluator_version TEXT NOT NULL,
+    config_hash TEXT NOT NULL,
+    input_run_ids_json TEXT NOT NULL,
+    input_hash TEXT NOT NULL,
+    values_json TEXT NOT NULL,
+    filter_id TEXT REFERENCES filter_execution(filter_id),
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS evaluation_candidate ON evaluation(candidate_id);
+
+CREATE TABLE IF NOT EXISTS decision (
+    decision_id TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
+    stage TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    component_name TEXT NOT NULL,
+    component_version TEXT NOT NULL,
+    reason_codes_json TEXT NOT NULL,
+    warning_codes_json TEXT NOT NULL,
+    details_json TEXT NOT NULL,
+    filter_id TEXT REFERENCES filter_execution(filter_id),
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS decision_candidate ON decision(candidate_id);
+CREATE INDEX IF NOT EXISTS decision_filter ON decision(filter_id);
+
 CREATE TABLE IF NOT EXISTS mt5_reported_metrics (
     job_id TEXT NOT NULL REFERENCES job(job_id),
     name TEXT NOT NULL,
@@ -292,8 +350,8 @@ class Database:
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
-            elif row["version"] in (1, 2):
-                # v1 -> v2 -> v3 only add tables (created above by the idempotent DDL)
+            elif row["version"] in (1, 2, 3):
+                # every step so far only adds tables (created above by the idempotent DDL)
                 self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported schema version {row['version']} (expected {SCHEMA_VERSION})")

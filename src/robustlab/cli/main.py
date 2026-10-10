@@ -25,6 +25,8 @@ optimize_app = typer.Typer(no_args_is_help=True, help="Full-grid MT5 optimizatio
 app.add_typer(optimize_app, name="optimize")
 trials_app = typer.Typer(no_args_is_help=True, help="Trial ledger (number of tried configurations, P3)")
 app.add_typer(trials_app, name="trials")
+filter_app = typer.Typer(no_args_is_help=True, help="Initial filter: profiles, PSR gate, all gates recorded (P4)")
+app.add_typer(filter_app, name="filter")
 
 WORKSPACE = typer.Option(Path("workspace"), "--workspace", help="Workspace folder (DB, artifacts)")
 
@@ -380,6 +382,104 @@ def trials_show(strategy_family: str, workspace: Path = WORKSPACE) -> None:
         typer.echo(f"{r['created_at']} {r['round_id']} chunk={r['chunk_index']} study={r['study_id']} "
                    f"[{r['from_date']}, {r['to_date']}) trials={r['n_trials_raw']}")
     typer.echo(f"total trials (raw N): {sum(r['n_trials_raw'] for r in rows)}")
+
+
+def _print_filter_summary(summary: dict) -> None:
+    for k in ("filter_id", "round_id", "profile", "profile_hash", "component", "candidates", "passed", "failed",
+              "filter_runs_on_this_round"):
+        typer.echo(f"{k}: {summary[k]}")
+    typer.echo("reasons (a candidate can have several):")
+    for code, n in summary["reason_counts"].items():
+        typer.echo(f"  {code}: {n}")
+    for code, n in summary["warning_counts"].items():
+        typer.echo(f"  warning {code}: {n}")
+    c = summary["conditions"]
+    typer.echo(f"conditions: deposit={c.get('deposit')} {c.get('currency')} leverage={c.get('leverage')} "
+               f"fixed={c.get('fixed_inputs')} server={c.get('server')} (margin level is judged at these conditions)")
+    typer.echo("note: passing means 'may go on to robustness/statistics', not a forecast of profit; "
+               "PSR does not correct for the number of trials (DSR does, P6)")
+
+
+@filter_app.command("run")
+def filter_run(round_id: str,
+               profile: str = typer.Option(..., "--profile", help="Strategy profile name, e.g. intraday"),
+               profiles: Path = typer.Option(Path("configs/strategy_profiles.yaml"), "--profiles"),
+               workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.filtering.run import run_filter
+
+    out = run_filter(workspace, round_id, profiles, profile)
+    if as_json:
+        _emit({"status": out.status, "message": out.message, **out.summary}, True)
+        raise typer.Exit(out.exit_code)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        _print_filter_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@filter_app.command("show")
+def filter_show(filter_id: str, workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.filtering.run import FilterError, summarize
+
+    db = _open(workspace)
+    try:
+        try:
+            summary = summarize(db, filter_id)
+        except FilterError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+    finally:
+        db.close()
+    if as_json:
+        _emit(summary, True)
+    else:
+        _print_filter_summary(summary)
+
+
+@app.command("why-not")
+def why_not_cmd(candidate_id: str, filter_id: str | None = typer.Option(None, "--filter", help="Default: latest"),
+                workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    """Every gate of the filter decision for one candidate: value, threshold, status (P4)."""
+    from robustlab.filtering.run import FilterError, why_not
+
+    db = _open(workspace)
+    try:
+        try:
+            w = why_not(db, candidate_id, filter_id)
+        except FilterError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+    finally:
+        db.close()
+    if as_json:
+        _emit(w, True)
+        return
+    typer.echo(f"candidate: {w['candidate_id']}  params: {w['params']}")
+    typer.echo(f"filter: {w['filter_id']} ({w['component']}, profile {w['profile']} {w['profile_hash']})  "
+               f"outcome: {w['outcome']}")
+    typer.echo("reasons: " + (", ".join(w["reasons"]) or "-") + ("  warnings: " + ", ".join(w["warnings"])
+                                                                 if w["warnings"] else ""))
+    typer.echo("gates:")
+    for g in w["gates"]:
+        note = f"  ({g['note']})" if g.get("note") else ""
+        typer.echo(f"  {g['status']:<14} {g['gate']:<16} value={g['value']} threshold={g['threshold']}{note}")
+    v = w["values"]
+    typer.echo(f"psr: {v.get('psr')} (SR*={v.get('psr_sr_star')}, n={v.get('n')}, sharpe={v.get('sharpe')}, "
+               f"skew={v.get('skewness')}, kurtosis={v.get('kurtosis')}, inputs {v.get('psr_input_definition')})")
+    if v.get("min_trl") is not None:
+        typer.echo(f"min_trl: {v['min_trl']:.1f} days (extra days needed: {v.get('extra_days_needed')})")
+    else:
+        typer.echo(f"min_trl: n/a ({v.get('min_trl_reason')})")
+    typer.echo(f"recorded, not filtered (C51): equity_max_dd={v.get('equity_max_dd')} "
+               f"({v.get('equity_max_dd_pct')}%), balance_max_dd={v.get('balance_max_dd')}")
+    c = w["conditions"]
+    typer.echo(f"conditions: deposit={c.get('deposit')} {c.get('currency')} leverage={c.get('leverage')} "
+               f"fixed={c.get('fixed_inputs')} server={c.get('server')}")
+    if w["decisions_for_candidate"] > 1:
+        typer.echo(f"note: {w['decisions_for_candidate']} filter decisions exist for this candidate; "
+                   "use --filter to pick one")
 
 
 if __name__ == "__main__":  # pragma: no cover

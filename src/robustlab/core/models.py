@@ -237,6 +237,38 @@ class StudyRequest(_Strict):
         return self
 
 
+class StrategyProfile(_Strict):
+    """Initial-filter thresholds for one strategy type (ARCHITECTURE §9.6, P4_PLAN §3)."""
+
+    description: str = ""
+    psr_threshold: float
+    psr_sr_star: float = 0.0
+    min_trades: int
+    min_days: int
+    min_margin_level_pct: float
+    max_positions: int | None = None
+    trades_per_year: tuple[float, float]
+
+    @model_validator(mode="after")
+    def _valid(self) -> StrategyProfile:
+        if not 0.5 <= self.psr_threshold < 1:
+            raise ValueError("psr_threshold must be in [0.5, 1)")
+        if self.min_trades < 1 or self.min_days < 2:
+            raise ValueError("min_trades must be >= 1 and min_days >= 2")
+        if self.min_margin_level_pct < 0:
+            raise ValueError("min_margin_level_pct must be >= 0")
+        if self.max_positions is not None and self.max_positions < 1:
+            raise ValueError("max_positions must be >= 1")
+        lo, hi = self.trades_per_year
+        if not 0 <= lo <= hi:
+            raise ValueError("trades_per_year must be [low, high] with 0 <= low <= high")
+        return self
+
+
+class ProfileFile(_Strict):
+    profiles: dict[str, StrategyProfile]
+
+
 class TerminalConfig(_Strict):
     terminal_path: Path = Field(description="Portable terminal64.exe")
     data_dir: Path | None = Field(default=None, description="Data folder; defaults to the terminal folder (portable)")

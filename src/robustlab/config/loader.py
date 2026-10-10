@@ -13,6 +13,8 @@ from robustlab.core.ids import canonical_json, sha256_hex
 from robustlab.core.models import (
     BacktestRequest,
     DataPartition,
+    ProfileFile,
+    StrategyProfile,
     StrategySpec,
     StudyRequest,
     TerminalConfig,
@@ -92,3 +94,12 @@ def load_study(path: Path) -> LoadedStudy:
     strategy = _parse(StrategySpec, strategy_path, load_yaml(strategy_path))
     study_hash = sha256_hex(canonical_json(study.model_dump(mode="json")))
     return LoadedStudy(study, path.resolve(), strategy, strategy_path, study_hash)
+
+
+def load_profile(path: Path, name: str) -> tuple[StrategyProfile, str]:
+    """One strategy profile and the hash of its content (recorded with every decision, P4)."""
+    pf = _parse(ProfileFile, path, load_yaml(path))
+    if name not in pf.profiles:
+        raise ConfigError(f"{path}: unknown strategy profile {name!r} (have {sorted(pf.profiles)})")
+    prof = pf.profiles[name]
+    return prof, sha256_hex(canonical_json({"name": name, **prof.model_dump(mode="json")}))

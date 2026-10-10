@@ -12,6 +12,8 @@ Success of one chunk (one MT5 optimization job) needs ALL of (ARCHITECTURE §14.
 from __future__ import annotations
 
 import csv
+import gzip
+import hashlib
 import io
 import json
 from dataclasses import dataclass
@@ -97,26 +99,57 @@ def expert_cache_files(data_dir: Path, expert: str) -> list[Path]:
     return sorted(cache.glob(f"{name}.*.opt")) if cache.is_dir() else []
 
 
+DAILY_COLS = ["date", "balance_close", "equity_close", "equity_min", "equity_max", "positions_max", "ticks"]
+
+
+def _sorted_daily(rows: list[tuple[tuple, dict[str, str]]]) -> list[tuple[tuple, dict[str, str]]]:
+    return sorted(rows, key=lambda x: (tuple(float(v) for v in x[0]), x[1]["date"]))
+
+
 def canonical_daily_bytes(grid_axes: list[str], rows: list[tuple[tuple, dict[str, str]]]) -> bytes:
     """Daily equity of all passes keyed by parameter values (independent of MT5 pass numbering)."""
-    cols = ["date", "balance_close", "equity_close", "equity_min", "equity_max", "positions_max", "ticks"]
     buf = io.StringIO(newline="")
     w = csv.writer(buf, lineterminator="\n")
-    w.writerow([*grid_axes, *cols])
-    for combo, r in sorted(rows, key=lambda x: (tuple(float(v) for v in x[0]), x[1]["date"])):
-        w.writerow([*(str(v) for v in combo), *(r[c].strip() for c in cols)])
+    w.writerow([*grid_axes, *DAILY_COLS])
+    for combo, r in _sorted_daily(rows):
+        w.writerow([*(str(v) for v in combo), *(r[c].strip() for c in DAILY_COLS)])
     return buf.getvalue().encode("utf-8")
 
 
-def daily_parquet_bytes(grid_axes: list[str], canonical: bytes, content_hash: str) -> bytes:
-    reader = csv.DictReader(io.StringIO(canonical.decode("utf-8")))
-    rows = list(reader)
-    data: dict[str, Any] = {a: pa.array([float(r[a]) for r in rows], pa.float64()) for a in grid_axes}
-    data["date"] = pa.array([r["date"] for r in rows], pa.string())
+def canonical_daily_hash(grid_axes: list[str], rows: list[tuple[tuple, dict[str, str]]]) -> str:
+    """sha256 of canonical_daily_bytes, computed row by row without building the whole CSV (C55)."""
+    h = hashlib.sha256()
+    buf = io.StringIO(newline="")
+    w = csv.writer(buf, lineterminator="\n")
+
+    def flush() -> None:
+        h.update(buf.getvalue().encode("utf-8"))
+        buf.seek(0)
+        buf.truncate()
+
+    w.writerow([*grid_axes, *DAILY_COLS])
+    flush()
+    for combo, r in _sorted_daily(rows):
+        w.writerow([*(str(v) for v in combo), *(r[c].strip() for c in DAILY_COLS)])
+        flush()
+    return h.hexdigest()
+
+
+def gzip_bytes(data: bytes) -> bytes:
+    """Deterministic gzip (mtime 0, no file name) so equal content keeps one content-addressed artifact."""
+    return gzip.compress(data, compresslevel=9, mtime=0)
+
+
+def daily_parquet_bytes(grid_axes: list[str], rows: list[tuple[tuple, dict[str, str]]], content_hash: str) -> bytes:
+    """The source of truth for daily equity (C55), built from the rows (not by re-parsing a CSV)."""
+    ordered = _sorted_daily(rows)
+    data: dict[str, Any] = {a: pa.array([float(c[i]) for c, _ in ordered], pa.float64())
+                            for i, a in enumerate(grid_axes)}
+    data["date"] = pa.array([r["date"] for _, r in ordered], pa.string())
     for c in ("balance_close", "equity_close", "equity_min", "equity_max"):
-        data[c] = pa.array([float(r[c]) for r in rows], pa.float64())
+        data[c] = pa.array([float(r[c]) for _, r in ordered], pa.float64())
     for c in ("positions_max", "ticks"):
-        data[c] = pa.array([int(r[c]) for r in rows], pa.int64())
+        data[c] = pa.array([int(r[c]) for _, r in ordered], pa.int64())
     table = pa.table(data).replace_schema_metadata(
         {"robustlab.schema": DAILY_SCHEMA_VERSION, "robustlab.content_sha256": content_hash})
     out = io.BytesIO()
@@ -317,7 +350,11 @@ def _execute_chunk(ws: Workspace, cfg: TerminalConfig, ls: LoadedStudy, grid: Gr
         ("set", set_name, store.put_bytes(set_bytes)),
     ]
     for role, path in frame_files.items():
-        if path.is_file():
+        if not path.is_file():
+            continue
+        if role == "pdaily":  # the bulky raw daily rows are kept compressed (C55)
+            roles.append(("frames_pdaily_gz", path.name + ".gz", store.put_bytes(gzip_bytes(path.read_bytes()))))
+        else:
             roles.append((f"frames_{role}", path.name, store.put_file(path)))
     for path in report_files:
         roles.append(("report", path.name, store.put_file(path)))
@@ -339,10 +376,10 @@ def _execute_chunk(ws: Workspace, cfg: TerminalConfig, ls: LoadedStudy, grid: Gr
     candidates: list[dict[str, Any]] = []
     runs: list[dict[str, Any]] = []
     if status is JobStatus.SUCCEEDED and frames:
-        canonical = canonical_daily_bytes(axis_names, [(c, r) for c, pf in matched.items() for r in pf.daily])
-        content_hash = ids.sha256_hex(canonical)
-        roles.append(("daily_canonical_csv", "daily.csv", store.put_bytes(canonical)))
-        roles.append(("daily_parquet", "daily.parquet", store.put_bytes(daily_parquet_bytes(axis_names, canonical,
+        daily_rows = [(c, r) for c, pf in matched.items() for r in pf.daily]
+        # C55: the canonical CSV is hashed (E1) but not stored; Parquet is the source of truth
+        content_hash = canonical_daily_hash(axis_names, daily_rows)
+        roles.append(("daily_parquet", "daily.parquet", store.put_bytes(daily_parquet_bytes(axis_names, daily_rows,
                                                                                             content_hash))))
         fields["daily_content_hash"] = content_hash
         warnings += _repro_warnings(db, round_id, ch.index, job_id, fields.get("observed_build"), content_hash)

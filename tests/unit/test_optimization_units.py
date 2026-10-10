@@ -137,3 +137,25 @@ def test_pass_metrics_from_hardware_pass_values():
     assert m["max_consec_wins"] == 3 and m["max_consec_wins_amount"] == 25.0
     assert m["recovery_factor"] == pytest.approx(38.0 / 38.93)
     assert m["days"] == 3 and m["bankrupt"] is False and "daily_sharpe" in m
+
+
+def test_c55_streamed_hash_equals_the_p3_canonical_csv_hash_and_gzip_is_deterministic():
+    import gzip
+    import hashlib
+
+    from robustlab.optimization import canonical_daily_bytes, canonical_daily_hash, gzip_bytes
+
+    rows = [((10, 30), {"date": "2023.01.03", "balance_close": "10001.00", "equity_close": "10002.50",
+                        "equity_min": "9999.00", "equity_max": "10003.00", "positions_max": "1", "ticks": "100"}),
+            ((5, 20), {"date": "2023.01.02", "balance_close": "10000.00", "equity_close": "9998.00",
+                       "equity_min": "9997.00", "equity_max": "10000.00", "positions_max": "1", "ticks": " 90"})]
+    # the reproducibility hash (E1) must not change with the storage format (C55)
+    assert canonical_daily_hash(["A", "B"], rows) == hashlib.sha256(canonical_daily_bytes(["A", "B"], rows)).hexdigest()
+    data = b"pass,date\n0,2023.01.02\n" * 100
+    assert gzip_bytes(data) == gzip_bytes(data) and gzip.decompress(gzip_bytes(data)) == data
+
+
+def test_scipy_normal_distribution_is_available():
+    from scipy.stats import norm
+
+    assert norm.cdf(0) == 0.5 and abs(norm.ppf(0.95) - 1.6448536269514722) < 1e-12

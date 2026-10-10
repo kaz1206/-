@@ -69,3 +69,43 @@ def env(tmp_path, monkeypatch):
     return e
 
 
+@pytest.fixture
+def opt(env, monkeypatch):
+    cfg = env.req.parent.parent
+    (cfg / "strategies" / "smoke3.yaml").write_text(textwrap.dedent("""
+        strategy_name: RL_SmokeTest
+        expert: RobustLab\\RL_SmokeTest
+        telemetry_version: "3"
+        inputs:
+          - {name: InpFastPeriod, type: int}
+          - {name: InpSlowPeriod, type: int}
+          - {name: InpLots, type: double}
+    """))
+
+    def study(name="s.yaml", max_passes=2000, fast=(5, 1, 7), slow=(20, 10, 40), period=("2022-01-03", "2023-01-02")):
+        p = cfg / name
+        p.write_text(textwrap.dedent(f"""
+            study_id: test_grid
+            strategy_file: strategies/smoke3.yaml
+            symbol: EURUSD
+            timeframe: H1
+            from_date: {period[0]}
+            to_date: {period[1]}
+            param_space:
+              InpFastPeriod: {{start: {fast[0]}, step: {fast[1]}, stop: {fast[2]}}}
+              InpSlowPeriod: {{start: {slow[0]}, step: {slow[1]}, stop: {slow[2]}}}
+            fixed: {{InpLots: 0.01}}
+            tester: {{model: OHLC_M1, deposit: 10000, currency: USD, leverage: 100}}
+            max_passes_per_job: {max_passes}
+        """))
+        return p
+
+    def run(path=None, mode="ok", rerun=False):
+        monkeypatch.setenv("FAKE_MODE", "ok")
+        monkeypatch.setenv("FAKE_OPT_MODE", mode)
+        from robustlab.optimization import run_optimization
+
+        return run_optimization(path or study(), env.terminal_cfg, env.partition, env.ws, rerun=rerun)
+
+    env.study, env.run_opt = study, run
+    return env

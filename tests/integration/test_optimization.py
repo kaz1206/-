@@ -1,55 +1,13 @@
 """P3 optimization flow against the fake terminal (P3_PLAN §7, C40-C49)."""
 
 import json
-import textwrap
 
 import pytest
 from typer.testing import CliRunner
 
 from robustlab.cli.main import app
-from robustlab.optimization import run_optimization
 from robustlab.single_backtest import EXIT_GUARD, EXIT_OK, EXIT_RUNTIME, EXIT_USER
 from robustlab.storage.db import Database
-
-
-@pytest.fixture
-def opt(env, monkeypatch):
-    cfg = env.req.parent.parent
-    (cfg / "strategies" / "smoke3.yaml").write_text(textwrap.dedent("""
-        strategy_name: RL_SmokeTest
-        expert: RobustLab\\RL_SmokeTest
-        telemetry_version: "3"
-        inputs:
-          - {name: InpFastPeriod, type: int}
-          - {name: InpSlowPeriod, type: int}
-          - {name: InpLots, type: double}
-    """))
-
-    def study(name="s.yaml", max_passes=2000, fast=(5, 1, 7), slow=(20, 10, 40), period=("2022-01-03", "2023-01-02")):
-        p = cfg / name
-        p.write_text(textwrap.dedent(f"""
-            study_id: test_grid
-            strategy_file: strategies/smoke3.yaml
-            symbol: EURUSD
-            timeframe: H1
-            from_date: {period[0]}
-            to_date: {period[1]}
-            param_space:
-              InpFastPeriod: {{start: {fast[0]}, step: {fast[1]}, stop: {fast[2]}}}
-              InpSlowPeriod: {{start: {slow[0]}, step: {slow[1]}, stop: {slow[2]}}}
-            fixed: {{InpLots: 0.01}}
-            tester: {{model: OHLC_M1, deposit: 10000, currency: USD, leverage: 100}}
-            max_passes_per_job: {max_passes}
-        """))
-        return p
-
-    def run(path=None, mode="ok", rerun=False):
-        monkeypatch.setenv("FAKE_MODE", "ok")
-        monkeypatch.setenv("FAKE_OPT_MODE", mode)
-        return run_optimization(path or study(), env.terminal_cfg, env.partition, env.ws, rerun=rerun)
-
-    env.study, env.run_opt = study, run
-    return env
 
 
 def q(env, sql, params=()):
@@ -82,8 +40,10 @@ def test_full_grid_is_ingested_with_trials_and_cleanup(opt):
     assert json.loads(job["tester_log_json"]) == {"started": True, "finished_passes": 9, "cache_hit": False,
                                                   "local": 9, "remote": 0, "cloud": 0}
     roles = {r["role"] for r in q(opt, "SELECT role FROM opt_job_artifact")}
-    assert {"ini", "set", "frames_passes", "frames_pdaily", "frames_fm_done", "report", "log_segment",
-            "daily_canonical_csv", "daily_parquet"} <= roles
+    assert {"ini", "set", "frames_passes", "frames_pdaily_gz", "frames_fm_done", "report", "log_segment",
+            "daily_parquet"} <= roles
+    # C55: the canonical CSV is hashed but not stored; Parquet is the source of truth
+    assert "daily_canonical_csv" not in roles and "frames_pdaily" not in roles
     assert not list(opt.common.glob("RL_*")) and not list(opt.data.glob("RL_*_report*"))
     # the optimization .set marks the axes with Y and keeps the rest fixed (X9)
     set_sha = q(opt, "SELECT sha256 FROM opt_job_artifact WHERE role = 'set'")[0]["sha256"]

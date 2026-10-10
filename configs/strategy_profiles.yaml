@@ -1,0 +1,44 @@
+# Strategy-type profiles for the initial filter (ARCHITECTURE §9.6, P4_PLAN §3, C51-C54).
+# A profile's content is hashed and recorded with every decision; changing a value creates a new
+# filter execution and never rewrites old decisions.
+# min_margin_level_pct is evaluated at the round's standard conditions (lot, deposit, leverage, server)
+# and is not a safety judgement (C52). DD limits are not filtered here (C51, evaluated in P9).
+# psr_threshold: the PSR(SR*) value that supports a true Sharpe above SR*; it is NOT a probability of
+# future profit and it does not correct for multiple testing (that is DSR, P6) (C54).
+profiles:
+  intraday:
+    description: "Intraday systems, roughly 100-600 trades per year"
+    psr_threshold: 0.95
+    psr_sr_star: 0.0
+    min_trades: 30
+    min_days: 60
+    min_margin_level_pct: 200
+    max_positions: null          # not limited for this type (recorded only)
+    trades_per_year: [100, 600]  # outside -> WARN only (M6)
+  swing_trend:
+    description: "Swing / trend following, roughly 20-150 trades per year"
+    psr_threshold: 0.95
+    psr_sr_star: 0.0
+    min_trades: 30
+    min_days: 60
+    min_margin_level_pct: 200
+    max_positions: null
+    trades_per_year: [20, 150]
+  mean_reversion:
+    description: "Mean reversion, roughly 50-400 trades per year"
+    psr_threshold: 0.95
+    psr_sr_star: 0.0
+    min_trades: 30
+    min_days: 60
+    min_margin_level_pct: 200
+    max_positions: null
+    trades_per_year: [50, 400]
+  scalping:
+    description: "Scalping, roughly 500-5,000 trades per year"
+    psr_threshold: 0.95
+    psr_sr_star: 0.0
+    min_trades: 30
+    min_days: 60
+    min_margin_level_pct: 200
+    max_positions: null
+    trades_per_year: [500, 5000]
