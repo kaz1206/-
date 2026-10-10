@@ -321,7 +321,8 @@ def optimize_show(round_id: str, workspace: Path = WORKSPACE, as_json: bool = ty
         "expected_passes": rnd["expected_passes"], "summary": summary,
         "trials_in_family": trials,
         "jobs": [{k: j[k] for k in ("job_id", "chunk_index", "attempt_no", "status", "expected_passes",
-                                    "received_passes", "observed_build", "error_class", "error_detail")}
+                                    "received_passes", "observed_build", "daily_content_hash", "error_class",
+                                    "error_detail")}
                  | {"warnings": json.loads(j["warnings_json"]), "cache_deleted": json.loads(j["cache_deleted_json"] or "[]"),
                     "tester_log": json.loads(j["tester_log_json"] or "{}")} for j in jobs],
     }
@@ -335,7 +336,7 @@ def optimize_show(round_id: str, workspace: Path = WORKSPACE, as_json: bool = ty
     for j in data["jobs"]:
         typer.echo(f"job {j['job_id']} chunk={j['chunk_index']} #{j['attempt_no']} {j['status']} "
                    f"passes={j['received_passes']}/{j['expected_passes']} build={j['observed_build']} "
-                   f"agents={j['tester_log']}")
+                   f"daily_hash={(j['daily_content_hash'] or '-')[:16]} agents={j['tester_log']}")
         if j["error_detail"]:
             typer.echo(f"  error: {j['error_class']}: {j['error_detail']}")
         for w in j["warnings"]:

@@ -486,7 +486,10 @@ def _repro_warnings(db: Database, round_id: str, chunk: int, job_id: str, build:
     if prev is None:
         return []
     if prev["observed_build"] != build:
-        return [f"REPRO_NOT_COMPARABLE_BUILD_CHANGED: {prev['job_id']} build {prev['observed_build']} -> {build}"]
+        # still reported: identical results across builds are useful evidence, but not a same-build match
+        same = "identical" if prev["daily_content_hash"] == content_hash else "different"
+        return [f"REPRO_NOT_COMPARABLE_BUILD_CHANGED: {prev['job_id']} build {prev['observed_build']} -> {build} "
+                f"(daily equity {same})"]
     if prev["daily_content_hash"] == content_hash:
         return [f"REPRO_MATCH: daily equity of all passes identical to {prev['job_id']}"]
     return [f"REPRO_MISMATCH: daily equity differs from {prev['job_id']} with the same build"]
