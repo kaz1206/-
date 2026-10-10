@@ -1,6 +1,6 @@
 # P1 実装計画: MT5 単一バックテストの安全な実行と再現可能な保存
 
-- 状態: **実装完了・実機 E2E 待ち（2026-10-09）**。手順は `docs/runbooks/P1_E2E.md`。実機確認（`verification/p1/RECORD.md`）完了。設計変更 E1・F1〜F8・D1〜D8 は承認済みで、設計書に反映済み（C18〜C34）。**本文と §15 の「確定事項」が食い違う場合は §15 を優先する**
+- 状態: **完了（2026-10-10、実機 E2E 合格）**。結果は §17。手順は `docs/runbooks/P1_E2E.md`。実機確認（`verification/p1/RECORD.md`）完了。設計変更 E1・F1〜F8・D1〜D8 は承認済みで、設計書に反映済み（C18〜C34）。**本文と §15 の「確定事項」が食い違う場合は §15 を優先する**
 - 作成日: 2026-10-08
 - 前提として確認した文書: `docs/ARCHITECTURE.md` v0.2、`docs/research/FINDINGS.md`、`docs/research/SOURCES.md`、`docs/DESIGN_CHANGELOG.md`、`CLAUDE.md`
 - リポジトリの現状: コードは 0 行。ドキュメントのみ（上記 5 ファイル＋`README.md`）。再利用できる既存実装はない。
@@ -360,3 +360,19 @@ rlab backtest run configs/requests/<request>.yaml [--rerun]
 | 期間外ティックの扱い | 最初のティックが FromDate より前、または最後のティックが ToDate 以降なら `QUARANTINED`（`PERIOD_SEMANTICS`） | 実機で確認した半開区間（F2）と違う挙動を検出するため |
 | 絶対パス化（E2E 初回で発見） | workspace と ini のパスを絶対パスにしてから MT5 に渡す | MT5 は自分のフォルダを作業ディレクトリとして起動するため、相対パスの `/config` を解決できず、テストが始まらなかった（`FAILED_TO_START`）。回帰テストを追加 |
 | 自動アップデートの引き継ぎ（G1/G2、承認済み） | LiveUpdate の `/update` 起動行を検出したら、再起動された端末の終了まで待って判定する。同じ端末のプロセスが残っている間は判定・後片付けをしない | 実機 E2E で観測（C35/C36） |
+
+## 17. 実機 E2E の結果（2026-10-10、Windows 11 / MT5 build 6251 / MetaQuotes-Demo）
+
+| 完了条件（§13） | 結果 | 根拠 |
+|---|---|---|
+| 1. Linux で全テスト合格 | ✅ 83 件合格 | `uv run pytest` |
+| 2. W1〜W12・W14 の記録とコードへの反映 | ✅ | `verification/p1/RECORD.md`、F1〜F8 |
+| 3. 実機で単一テストが成功し保存される | ✅ `RL_SmokeTest` EURUSD H1 `[2023-01-02, 2024-01-01)`: SUCCEEDED、約定 311 件、純損益 47.16（MT5 統計と自前合計が一致）、所要 12 秒 | job `jb_20261010111541758_df729278` |
+| 4. `--rerun` で正規化約定の内容ハッシュが一致 | ✅ `REPRO_MATCH`（`dae78cda…`）。生の約定 CSV・統計ファイルのハッシュも一致 | job `jb_20261010111632364_efb8208d` |
+| 5. Holdout と交差する依頼の拒否 | ✅ `GUARD_REJECTED`、終了コード 3、job なし（MT5 未起動）。分割定義の変更検知は結合テストで確認 | `holdout_check_eurusd_h1.yaml` |
+| 6. 異常時に SUCCEEDED にならない | ✅ 実機で開始失敗 2 件（相対パス、自動アップデート）がいずれも `FAILED_TO_START` として記録された。強制終了・タイムアウトは結合テストで確認 | job #1, #2 |
+| 7. ini・artifacts に認証情報がない | ✅ ini は認証キーを生成しない（テストで確認）。ログ artifacts には口座番号・IP が含まれるが、`workspace/`（git 管理外）に限定し、CLI は本文を表示しない（F8） | — |
+| 8. `backtest show` で全情報を確認できる | ✅ EA 版・パラメータ・期間・設定・ビルド・全原本のハッシュを表示 | — |
+| 9. 設計書・変更履歴への反映 | ✅ C18〜C36 | `docs/DESIGN_CHANGELOG.md` |
+
+E2E で見つかり修正したもの: 相対パスの `/config`（実装不具合）、MT5 自動アップデートの引き継ぎ（G1/G2、C35/C36）。

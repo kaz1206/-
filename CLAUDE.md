@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1（MT5 単一バックテストの安全な実行と再現可能な保存）を実装済み。実機 E2E は `docs/runbooks/P1_E2E.md`。
+P1（MT5 単一バックテストの安全な実行と再現可能な保存）は完了（2026-10-10 実機 E2E 合格、`docs/plans/P1_PLAN.md` §17）。
 
 ## 主要ドキュメント
 
