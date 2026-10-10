@@ -75,7 +75,7 @@ P4 はランキングも選抜もしない（§3.3「やらないこと」）。
 |---|---|---|---|---|
 | 破産 | `BANKRUPTCY` | エクイティの最小値 ≤ 0 | `bankrupt` | — |
 | ロスカット | `STOP_OUT` | ロスカット約定が 1 件以上 | `stop_out_deals` | — |
-| 証拠金維持率 | `MARGIN_LEVEL_LOW` | 最小証拠金維持率 < 閾値（**ラウンドの標準条件での値**。§3.4） | `min_margin_level` | 200% |
+| 証拠金維持率 | `MARGIN_LEVEL_LOW` | 最小証拠金維持率 < 閾値（**ラウンドの標準条件での値**。§3.3） | `min_margin_level` | 200% |
 | 同時ポジション数 | `MAX_POSITIONS_EXCEEDED` | 最大同時ポジション数 > 閾値 | `max_positions` | プロファイルごと（`intraday` は設定なし＝評価のみ） |
 | 取引数の絶対下限 | `INSUFFICIENT_TRADES` | 取引数 < 下限（安全装置。本体は PSR） | `trades` | 30 |
 | 日次データ量 | `INSUFFICIENT_DATA` | 日数 < 下限（歪度・尖度の推定に必要） | `days` | 60 |
