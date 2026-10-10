@@ -51,6 +51,7 @@
 
 | S-HW-P2 | 実機確認（2026-10-10）: Telemetry v2、`RL_SmokeTest` EURUSD H1 2023 年、build 6251。`rlab metrics show` の照合表と約定一覧（`tests/fixtures/hw_20261010`） | `STAT_MAX_CONWINS` 等の意味（金額と回数）、最長の連続が複数あるときの MT5 の選び方、エクイティ DD の差（0.26%）、Telemetry v2 の所要時間（+16%）、MT5 シャープ ≈ 日次シャープ × √(日数) | **A**（実機観測） |
 | S-HW-P3 | 実機確認（2026-10-10）: `verification/p3`、`RL_Verify_P3`、EURUSD H1 2023-01〜03、M1 OHLC、12 パス、build 6251。記録は `verification/p3/RECORD.md` | `Optimization=1` の ini 起動、テスターログの最適化完了行とエージェント内訳、XML の形式（UTF-8、英語の列名、Result 降順、最適化した入力だけ）、Frames の到着（複数/回・順不同）と 161 KB のフレーム、キャッシュによる未実行、ローカルエージェントだけの使用、単一テストとの一致 | **A**（実機観測） |
+| S-HW-P3E2E | 実機 E2E（2026-10-10）: `rlab optimize run configs/studies/rl_smoketest_grid.yaml`（1,044 パス、Real ticks、EURUSD H1 2022-01-03〜2024-01-01、build 6251、2 ジョブ）と単一テスト `x8_check_eurusd_h1.yaml` | 全パス取込（580/580、464/464）、ローカルエージェントのみ、単一テストと最適化パス 127 の完全一致（Real ticks）、最長連敗が同じ長さで 2 つあるときの MT5 の選び方（金額の絶対値が最大） | **A**（実機観測） |
 
 ## 2. 原著論文・学術資料
 

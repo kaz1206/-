@@ -308,9 +308,9 @@ def optimize_show(round_id: str, workspace: Path = WORKSPACE, as_json: bool = ty
     summary = {
         "passes_stored": len(profits),
         "chunks_succeeded": f"{len(latest_ok)}/{rnd['chunk_count']}",
-        "net_profit_min": min(profits) if profits else None,
-        "net_profit_median": statistics.median(profits) if profits else None,
-        "net_profit_max": max(profits) if profits else None,
+        "net_profit_min": round(min(profits), 2) if profits else None,
+        "net_profit_median": round(statistics.median(profits), 2) if profits else None,
+        "net_profit_max": round(max(profits), 2) if profits else None,
         "share_profitable": round(sum(p > 0 for p in profits) / len(profits), 4) if profits else None,
     }
     data = {

@@ -92,3 +92,9 @@
 | C48 | K3 | C42 | `Tester/cache` を退避（移動） | 最適化ジョブの前に対象 EA の `.opt` だけを削除し、消したファイル名を記録。テスターログに `optimization already processed` があれば失敗（`CACHE_HIT`） | 退避先が増え続ける。中身は rlab が保存済み。キャッシュ返却は Frames が届かないのに XML が出る | S-HW-P3 |
 | C49 | K4 | C41 | XML は件数・パラメータ・純損益の照合 | 照合は列名（`Pass`、`Profit`、`Trades`、最適化軸の入力名）で行う。`Result` は使わず `OptimizationCriterion` は指定しない。列名がなければ `XML_UNREADABLE` | 列名は UI 言語によらず英語だった。`Result` は基準で意味が変わる | S-HW-P3 |
 
+## v0.8（2026-10-11）: P3 実機 E2E による指標定義の変更（MetricEngine m3）
+
+| # | 元 ID | 対象 | 変更前 | 変更後 | 理由 | 根拠 |
+|---|---|---|---|---|---|---|
+| C50 | L1 | `docs/metrics_definitions.md` m3、C38 | 最長の連続が複数あれば最後のもの（m2） | 金額の絶対値が最大のもの（同額なら後のもの） | P3 E2E の単一テストで、長さ 9 の連敗が −54.26 → −35.59 の順にあり、MT5 は −54.26。3 つの実機データすべてと一致するのはこの規則だけ | S-HW-P1、S-HW-P2、S-HW-P3E2E |
+

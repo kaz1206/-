@@ -94,10 +94,10 @@ E2E_MT5 = {"profit": 47.16, "gross_profit": 335.07, "gross_loss": -287.91, "trad
 E2E_TRACKED = {**TRACKED, "equity_max_dd": 85.33}
 
 
-def test_e2e_2023_matches_mt5_with_last_longest_run_and_approx_equity_dd():
+def test_e2e_2023_matches_mt5_with_largest_longest_run_and_approx_equity_dd():
     r = engine.compute(E2E_DEALS, initial_deposit=10000.0, tracked=E2E_TRACKED)
     rows = {c["name"]: c["status"] for c in compare.compare(r.metrics, E2E_MT5)}
-    assert r.metrics["max_consec_wins_amount"] == 19.99  # the LAST of the two length-4 runs (H2)
+    assert r.metrics["max_consec_wins_amount"] == 19.99  # two length-4 runs (19.41, 19.99): the larger one (m3, L1)
     assert rows["equity_max_dd"] == "APPROX_MATCH"  # 85.33 vs 85.11 (H3)
     others = {k: v for k, v in rows.items() if k not in ("equity_max_dd", "daily_sharpe")}
     assert set(others.values()) == {"MATCH"}, others
@@ -106,3 +106,19 @@ def test_e2e_2023_matches_mt5_with_last_longest_run_and_approx_equity_dd():
 def test_approx_match_has_a_limit():
     rows = {c["name"]: c["status"] for c in compare.compare({"equity_max_dd": 90.0}, {"equity_dd": 85.11})}
     assert rows["equity_max_dd"] == "MISMATCH"
+
+
+# --- m3 (L1): the P3 E2E data had two 9-loss runs, -54.26 then -35.59; MT5 reported -54.26 ----------
+@pytest.mark.parametrize(("pnls", "expected"), [
+    # P3 E2E shape: the larger loss run comes FIRST (m2 "last" would give -35.59)
+    ([-6.0] * 9 + [1.0] + [-3.95] * 9, (1, 1.0, 9, -54.0)),
+    # P2 2023 shape: the larger win run comes LAST
+    ([4.0, 5.0, 5.0, 5.41, -1.0, 5.0, 5.0, 5.0, 4.99], (4, 19.99, 1, -1.0)),
+    # equal amounts too: the later run (no ambiguity in the reported value)
+    ([2.0, 2.0, -1.0, 2.0, 2.0], (2, 4.0, 1, -1.0)),
+    # a shorter run with a bigger amount never wins
+    ([1.0, 1.0, 1.0, -1.0, 50.0, 50.0], (3, 3.0, 1, -1.0)),
+])
+def test_m3_longest_run_ties_take_the_largest_absolute_amount(pnls, expected):
+    w, wa, lo, la = engine._streaks(pnls)
+    assert (w, round(wa, 2), lo, round(la, 2)) == expected

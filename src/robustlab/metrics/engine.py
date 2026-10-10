@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 from scipy import stats as sstats
 
-METRIC_DEF_VERSION = "m2"  # m2: longest-run ties take the LAST run (H2, C38)
+METRIC_DEF_VERSION = "m3"  # m2: ties take the LAST run (C38); m3: ties take the largest |amount| (L1, C50)
 
 DEAL_BUY, DEAL_SELL, DEAL_BALANCE = 0, 1, 2
 ENTRY_IN, ENTRY_OUT, ENTRY_INOUT, ENTRY_OUT_BY = 0, 1, 2, 3
@@ -43,8 +43,10 @@ def _ordered(deals: list[dict[str, str]]) -> list[dict[str, str]]:
 def _streaks(pnls: list[float]) -> tuple[int, float, int, float]:
     """Longest win run (count, amount of that run) and loss run. Zero P/L breaks both runs.
 
-    When several runs share the maximal length, the LAST one is used (m2, H2): this matches MT5 on
-    both hardware data sets (P2_PLAN §12). "Largest amount" would match them too; still undecided.
+    When several runs share the maximal length, the one with the largest absolute amount is used
+    (m3, L1), and the later one if the amounts are equal too. This is the only rule that matches MT5
+    on all three hardware data sets (S-HW-P1, S-HW-P2, S-HW-P3E2E); m2 took the last run and failed
+    on the P3 E2E data (two 9-loss runs: -54.26 then -35.59, MT5 reports -54.26).
     """
     best_w = best_l = cur_w = cur_l = 0
     amt_w = amt_l = run_w = run_l = 0.0
@@ -56,9 +58,10 @@ def _streaks(pnls: list[float]) -> tuple[int, float, int, float]:
         else:
             cur_w = cur_l = 0
             run_w = run_l = 0.0
-        if cur_w and cur_w >= best_w:
+        # at equal length the running amount is the full amount of a run of that length
+        if cur_w and (cur_w > best_w or (cur_w == best_w and abs(run_w) >= abs(amt_w))):
             best_w, amt_w = cur_w, run_w
-        if cur_l and cur_l >= best_l:
+        if cur_l and (cur_l > best_l or (cur_l == best_l and abs(run_l) >= abs(amt_l))):
             best_l, amt_l = cur_l, run_l
     return best_w, amt_w, best_l, amt_l
 
