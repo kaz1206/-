@@ -3,6 +3,26 @@
 実装: `src/robustlab/metrics/engine.py`（純粋関数）、照合: `src/robustlab/metrics/compare.py`。
 定義を変えたら `METRIC_DEF_VERSION` を上げ、本書に新しい版の節を追加する（古い計算結果は消さない）。
 
+## ロバストネス指標（P5、g1、C56〜C59）
+
+実装: `src/robustlab/robustness/grid_stats.py`（純粋関数）、`subperiod.py`。全候補（P4 の合否によらない）について計算し、`evaluation`（stage = `ROBUSTNESS`）に保存する。
+
+| 指標 | 定義 |
+|---|---|
+| スコア s(c) | 日次シャープ（p1 の `daily_sharpe`）。使えないときは計算の内部で −∞ とし、原因を `score_status` に記録（優先順: BANKRUPTCY > STOP_OUT > NO_TRADES > NOT_COMPUTABLE、該当する全部を `score_flags` に） |
+| 近傍 N(c) | グリッド上のチェビシェフ距離 1（2 軸で最大 8 点）。グリッドの外は数えない。`neighbours` に点数、内側の半分未満なら `edge` |
+| Robust Score | {s(c)} ∪ {s(n)} の 25% 分位点（`inverted_cdf`）。−∞ を含めて計算し、結果が −∞ なら null と理由 |
+| neighbour_median / Peak Gap | 近傍（自身を除く）の中央値（`inverted_cdf`）、s(c) − 中央値 |
+| Peak Ratio | s(c) ÷ 近傍の中央値。中央値 ≤ 0 なら計算しない（**独自拡張**、C56） |
+| neighbour_status_counts | 近傍の点の `score_status` ごとの件数 |
+| neighbour_pass_rate | 近傍のうち P4 合格の割合 |
+| 感度 | 軸方向に隣り合う 2 点のスコア差の絶対値。ラウンド全体は中央値、候補ごとは最大値（両方とも有限の組だけ） |
+| 島 | P4 合格点を斜めも含めた連結で分けたもの（面積 2 以上）。メドイド = 島内の他の点とのチェビシェフ距離の合計が最小の点（同点なら Robust Score が高い方、さらに同点なら座標が小さい方） |
+| region_status / regions_reason | 候補: IN_REGION / NOT_FILTER_PASS / ISOLATED_PASS。ラウンド: NO_FILTER_PASS / ALL_ISOLATED |
+| サブ期間 | 暦年ごとに Σ r_t と日次シャープ（r_t は PSR の入力と同じ定義）。黒字年の割合、最悪年、年別シャープの標準偏差（暦年が 2 未満なら理由つき） |
+
+保存では −∞・NaN を数値として残さない（null ＋ `*_reason`）。
+
 ## PSR の入力（P4、C53・C54）
 
 P4 の PSR ゲート（`src/robustlab/stats/psr.py`、`filtering/gates.py`）は、次の値を入力にする。いずれも m3（単一テスト）・p1（最適化パス）の日次系列の指標そのもの。

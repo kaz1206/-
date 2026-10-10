@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 4  # 2: P2 metrics; 3: P3 optimization tables; 4: P4 filter_execution/evaluation/decision/reason_code
+SCHEMA_VERSION = 5  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -35,6 +35,8 @@ _APPEND_ONLY = (
     "evaluation",
     "decision",
     "reason_code",
+    "robustness_execution",
+    "parameter_region",
 )
 
 _DDL = """
@@ -286,9 +288,38 @@ CREATE TABLE IF NOT EXISTS evaluation (
     input_hash TEXT NOT NULL,
     values_json TEXT NOT NULL,
     filter_id TEXT REFERENCES filter_execution(filter_id),
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    robust_id TEXT
 );
 CREATE INDEX IF NOT EXISTS evaluation_candidate ON evaluation(candidate_id);
+
+CREATE TABLE IF NOT EXISTS robustness_execution (
+    robust_id TEXT PRIMARY KEY,
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    filter_id TEXT NOT NULL REFERENCES filter_execution(filter_id),
+    score_name TEXT NOT NULL,
+    component_name TEXT NOT NULL,
+    component_version TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    axis_sensitivity_json TEXT NOT NULL,
+    status_counts_json TEXT NOT NULL,
+    n_candidates INTEGER NOT NULL,
+    n_regions INTEGER NOT NULL,
+    regions_reason TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS parameter_region (
+    region_id TEXT PRIMARY KEY,
+    robust_id TEXT NOT NULL REFERENCES robustness_execution(robust_id),
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    method TEXT NOT NULL,
+    method_version TEXT NOT NULL,
+    member_count INTEGER NOT NULL,
+    medoid_candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
+    members_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS decision (
     decision_id TEXT PRIMARY KEY,
@@ -346,11 +377,14 @@ class Database:
     def _migrate(self) -> None:
         # executescript() commits implicitly, so the idempotent DDL runs outside tx().
         self.conn.executescript(_DDL + _triggers())
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(evaluation)")}
+        if "robust_id" not in cols:  # v4 -> v5 adds one nullable column (existing rows unchanged)
+            self.conn.execute("ALTER TABLE evaluation ADD COLUMN robust_id TEXT")
         with self.tx():
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
-            elif row["version"] in (1, 2, 3):
+            elif row["version"] in (1, 2, 3, 4):
                 # every step so far only adds tables (created above by the idempotent DDL)
                 self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:

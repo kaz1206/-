@@ -27,6 +27,8 @@ trials_app = typer.Typer(no_args_is_help=True, help="Trial ledger (number of tri
 app.add_typer(trials_app, name="trials")
 filter_app = typer.Typer(no_args_is_help=True, help="Initial filter: profiles, PSR gate, all gates recorded (P4)")
 app.add_typer(filter_app, name="filter")
+robust_app = typer.Typer(no_args_is_help=True, help="Robustness: neighbourhood statistics, regions (P5)")
+app.add_typer(robust_app, name="robust")
 
 WORKSPACE = typer.Option(Path("workspace"), "--workspace", help="Workspace folder (DB, artifacts)")
 
@@ -480,6 +482,96 @@ def why_not_cmd(candidate_id: str, filter_id: str | None = typer.Option(None, "-
     if w["decisions_for_candidate"] > 1:
         typer.echo(f"note: {w['decisions_for_candidate']} filter decisions exist for this candidate; "
                    "use --filter to pick one")
+
+
+def _print_robust_summary(s: dict) -> None:
+    for k in ("robust_id", "round_id", "filter_id", "component", "score", "candidates"):
+        typer.echo(f"{k}: {s[k]}")
+    typer.echo(f"score_status: {s['score_status_counts']}  (candidates whose own score is -inf, by cause)")
+    typer.echo(f"robust_score: {s['robust_score_quantiles']}")
+    typer.echo(f"peak_gap: {s['peak_gap_quantiles']}")
+    typer.echo(f"axis_sensitivity (median |score change| per step): {s['axis_sensitivity']}")
+    typer.echo(f"edge candidates (fewer than half the neighbours): {s['edge_candidates']}")
+    typer.echo(f"regions: {len(s['regions'])}" + (f"  reason: {s['regions_reason']}" if s["regions_reason"] else ""))
+    for r in s["regions"]:
+        typer.echo(f"  {r['region_id']} size={r['member_count']} medoid={r['medoid_candidate_id']}")
+    typer.echo(f"region_status: {s['region_status_counts']}")
+    typer.echo(f"positive_year_share: {s['positive_year_share_distribution']}  (share of calendar years in profit)")
+    typer.echo("note: values only, no pass/fail (P7 decides); every candidate is evaluated whether it passed P4 or not")
+
+
+@robust_app.command("run")
+def robust_run(round_id: str, filter_id: str = typer.Option(..., "--filter", help="P4 filter execution"),
+               workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.robustness.run import run_robust
+
+    out = run_robust(workspace, round_id, filter_id)
+    if as_json:
+        _emit({"status": out.status, "message": out.message, **out.summary}, True)
+        raise typer.Exit(out.exit_code)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        _print_robust_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@robust_app.command("show")
+def robust_show(robust_id: str, candidate: str | None = typer.Option(None, "--candidate"),
+                workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.robustness.run import RobustError, summarize
+
+    db = _open(workspace)
+    try:
+        if candidate:
+            row = db.one("SELECT values_json FROM evaluation WHERE robust_id = ? AND candidate_id = ?",
+                         (robust_id, candidate))
+            if row is None:
+                typer.echo(f"no robustness values for {candidate} in {robust_id}", err=True)
+                raise typer.Exit(1)
+            v = json.loads(row["values_json"])
+            if as_json:
+                _emit(v, True)
+                return
+            for k in ("score", "score_status", "score_flags", "robust_score", "robust_score_reason", "peak_gap",
+                      "peak_gap_reason", "peak_ratio", "peak_ratio_reason", "neighbours", "edge",
+                      "neighbour_status_counts", "neighbour_pass_rate", "sensitivity_local", "region_status",
+                      "region_id", "region_size", "subperiod"):
+                typer.echo(f"{k}: {v.get(k)}")
+            return
+        try:
+            s = summarize(db, robust_id)
+        except RobustError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+    finally:
+        db.close()
+    if as_json:
+        _emit(s, True)
+    else:
+        _print_robust_summary(s)
+
+
+@robust_app.command("map")
+def robust_map(robust_id: str, metric: str = typer.Option("score", "--metric", help="score or robust"),
+               workspace: Path = WORKSPACE) -> None:
+    from robustlab.robustness.run import RobustError, grid_map
+
+    if metric not in ("score", "robust"):
+        typer.echo("--metric must be score or robust", err=True)
+        raise typer.Exit(1)
+    db = _open(workspace)
+    try:
+        try:
+            lines = grid_map(db, robust_id, metric)
+        except RobustError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+    finally:
+        db.close()
+    for line in lines:
+        typer.echo(line)
 
 
 if __name__ == "__main__":  # pragma: no cover

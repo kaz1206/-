@@ -7,7 +7,8 @@ from robustlab.storage.db import SCHEMA_VERSION, Database
 
 @pytest.mark.parametrize(("old", "dropped"), [(1, ["run_metrics", "trial_ledger", "decision"]),
                                              (2, ["trial_ledger", "opt_job", "evaluation"]),
-                                             (3, ["filter_execution", "evaluation", "decision", "reason_code"])])
+                                             (3, ["filter_execution", "evaluation", "decision", "reason_code"]),
+                                             (4, ["robustness_execution", "parameter_region"])])
 def test_old_database_is_migrated(tmp_path, old, dropped):
     path = tmp_path / "w.sqlite"
     Database(path).close()
@@ -19,7 +20,7 @@ def test_old_database_is_migrated(tmp_path, old, dropped):
     con.close()
     db = Database(path)
     try:
-        assert db.one("SELECT version FROM schema_version")["version"] == SCHEMA_VERSION == 4
+        assert db.one("SELECT version FROM schema_version")["version"] == SCHEMA_VERSION == 5
         for t in dropped:
             assert db.one("SELECT name FROM sqlite_master WHERE name = ?", (t,)) is not None
     finally:
@@ -31,7 +32,7 @@ def test_research_tables_of_p3_p4_are_append_only(tmp_path):
     try:
         names = {r["name"] for r in db.all("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
         for t in ("optimization_round", "opt_job_artifact", "pass_result", "trial_ledger", "filter_execution",
-                  "evaluation", "decision", "reason_code"):
+                  "evaluation", "decision", "reason_code", "robustness_execution", "parameter_region"):
             assert {f"{t}_no_update", f"{t}_no_delete"} <= names
         with pytest.raises(ValueError):
             db.update_job("x", table="pass_result", status="X")

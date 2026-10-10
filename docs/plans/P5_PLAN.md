@@ -1,6 +1,6 @@
 # P5 実装計画: ロバストネス評価（パラメータの島の数値化）
 
-- 状態: **計画（承認待ち、2026-10-11 のレビュー指摘 1・2 を反映済み）**
+- 状態: **実装済み（2026-10-11、N1〜N9。設計変更 C56〜C60）**。あなたの PC での動作確認待ち（§10）
 - 作成日: 2026-10-11
 - 前提: P4 完了（`docs/plans/P4_PLAN.md` §11）。設計書 `docs/ARCHITECTURE.md` §3.4（Robustness Evaluation）、§9（ロバストネス評価設計）、§20「P5 ロバストネス」
 - 進め方: **計画 → 承認 → 実装 → 実機のデータで動作確認**。MT5 は使わない（P3 で保存した全パスの指標と日次データだけを読む）
@@ -194,3 +194,41 @@
 | N7 | P5 は評価値だけを出し、合否は決めない | そのとおり | 設計書 §3.4。判定は P7 で、評価値を使って行う |
 | N8 | 内部では −∞ にまとめるが、保存では `score_status`（BANKRUPTCY / STOP_OUT / NO_TRADES / NOT_COMPUTABLE / OK）と近傍の内訳を記録し、原因を消した null を保存しない（レビュー指摘 1） | そのとおり | 取引なしと破産・ロスカットは意味が違う。後の段階で区別できるようにする |
 | N9 | ロバストネスの値は P4 の合否にかかわらず全候補で保存し、島に入らない理由（`region_status`）と島が 0 個の理由（`regions_reason`）を記録する（レビュー指摘 2） | そのとおり | 「島がない」と「周辺が不安定」を混同させない |
+
+---
+
+## 9. 実装メモ（計画からの細部の補足）
+
+- **CLI**: `rlab robust run <round_id> --filter <filter_id>`（フィルタ実行が別のラウンドのものなら `FILTER_ROUND_MISMATCH` で拒否）、`rlab robust show <robust_id> [--candidate <cd>]`、`rlab robust map <robust_id> [--metric score|robust]`
+- **地図の記号**: 値の順位を ` .:-=+*#%@`（低→高）で表す。`_` 取引なし、`B` 破産、`S` ロスカット、`?` 計算不能、`x` 自身のスコアは正常だが近傍のせいで Robust Score が −∞、`R` 島の中、`P` 孤立した P4 合格点。行が 2 番目の軸（上が大きい値）、列が 1 番目の軸
+- **島の面積 1**: 面積 1 の島は `parameter_region` に保存せず、候補の `region_status = ISOLATED_PASS` で表す
+- **入力**: フィルタ実行が使ったジョブの `pass_result` と、そのジョブの日次 Parquet（P3 で保存済み）を読む。新しい市場データは読まない
+- **テストで確かめた 3 点（承認時の確認事項）**:
+  1. 合格 0 件でも全候補に評価値が保存される: `test_no_filter_pass_still_evaluates_everyone`（合成）、`test_every_candidate_is_evaluated_and_minus_inf_causes_are_kept`（偽の端末のラウンド、DB まで）
+  2. 破産と取引なしが別々に記録され、近傍の件数が一致する: `test_minus_inf_causes_are_kept_and_counted`（全セルで直接数えた件数と一致）と、同じ結合テスト（`BANKRUPTCY 1・NO_TRADES 6・OK 2`）
+  3. 合成データで台地が孤立ピークより高く評価され、島の中心が仕様どおり: `test_isolated_peak_scores_below_the_plateau`（素のスコアは針 0.20 ＞ 台地の中心 0.10 だが、Robust Score は針 0.01 ＜ 中心 0.08。島は台地の 9 点で、メドイドは中心）、`test_medoid_rules_l_shape_and_ties`（同点の規則）
+- テスト: 226 件（P5 で 18 件追加）
+
+## 10. 動作確認の手順（あなたの PC で）
+
+MT5 は使わない。1 行ずつ実行する。
+
+```powershell
+cd C:\work\repo\rlab
+```
+```powershell
+git pull
+```
+```powershell
+py -3.13 -m uv sync
+```
+```powershell
+py -3.13 -m uv run rlab robust run or_9795248161825c3e --filter fl_d5c3a7c788f7c135
+```
+```powershell
+py -3.13 -m uv run rlab robust map <表示された robust_id>
+```
+
+- 1 つ目: 1,044 候補すべての評価値、`score_status` の内訳（`NO_TRADES` 55 の予想）、島 0 個（`NO_FILTER_PASS`）、軸ごとの感度（完了条件 2・4）
+- 2 つ目: 36 × 29 の地図。右下に取引なしの三角形（`_`）が出る予想（完了条件 3）
+

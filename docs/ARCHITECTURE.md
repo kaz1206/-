@@ -1099,7 +1099,7 @@ rlab ledger  <strategy_family>            # 試行回数台帳
 | **P2 Telemetry と指標** | Telemetry.mqh の拡張（日次エクイティ・最大含み損・最大ポジション・固定ロット）、Collection、MetricEngine | 自前指標と MT5 原値の差異が説明可能な範囲。期間別パフォーマンスが出る |
 | **P3 最適化と収集** | 最適化ジョブ（完全グリッド・チャンク分割、既定 2,000 パス/ジョブ）、**パス別 Frames（統計＋日次エクイティ、C40）**、XML は照合のみ（C41）、Trial Ledger（C44） | 1,000 パス規模の最適化を取込み、期待パス数と一致 |
 | **P4 フィルタ** | 戦略プロファイル、PSR ゲート（C53、C54）、全ゲート記録。詳細は [plans/P4_PLAN.md](plans/P4_PLAN.md) | `why-not` で全除外理由が表示される |
-| **P5 ロバストネス** | 近傍統計・Robust Score・Region・コストストレス（事後）・サブ期間・利益集中 | 合成データで孤立ピークを選ばないことを確認 |
+| **P5 ロバストネス** | 近傍統計・Robust Score・Region・サブ期間（C56〜C59）。コストストレス・利益集中は P8 へ（C60）。詳細は [plans/P5_PLAN.md](plans/P5_PLAN.md) | 合成データで孤立ピークを選ばないことを確認 |
 | **P6 統計** | PSR / DSR / Bootstrap CI | 論文数値例と一致 |
 | **P7 選択** | hard_gate / lexicographic / pareto / region | 決定性（同入力で同出力）・予算遵守 |
 | **P8 検証と OOS** | 複数期間検証、OOS マニフェスト・予測帯・一度きり実行 | 2 回目の OOS 実行が拒否される。`trace` で全経路表示 |

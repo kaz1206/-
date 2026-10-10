@@ -18,7 +18,8 @@ UTF-16LE .set in MQL5/Profiles/Tester that carries RL_JobId.
 With Optimization=1 in the ini it behaves like the hardware runs in verification/p3 (S-HW-P3):
 the full grid of the ||Y inputs, frames written by the "frame-mode instance" (out of pass order),
 tester log lines, an optimization XML (rows sorted by Result) and a cache file. FAKE_OPT_MODE:
-  ok, missing_pass, cache_hit, cloud, xml_mismatch, xml_bad_header, no_frames, bad_daily
+  ok, missing_pass, cache_hit, cloud, xml_mismatch, xml_bad_header, no_frames, bad_daily,
+  mixed (fast >= slow trades nothing; the lowest fast with the highest slow goes bankrupt)
 """
 
 from __future__ import annotations
@@ -109,10 +110,18 @@ def optimize(data_dir: Path, common: Path, kv: dict[str, str], params: dict[str,
                    "Statistics")
         cache_file.write_bytes(b"cache")
 
+    lo_fast = min(float(c[0]) for c in combos)
+    hi_slow = max(float(c[-1]) for c in combos)
+
     def result(combo):
         x = [float(v) for v in combo]
+        if mode == "mixed" and x[0] >= x[-1]:
+            return 0.0, 0  # an idle pass: no trade at all
         profit = round((x[0] - x[-1] / 4) * 0.37, 2)
         return profit, 10 + int(x[0]) % 7
+
+    def bankrupt(combo):
+        return mode == "mixed" and float(combo[0]) == lo_fast and float(combo[-1]) == hi_slow
 
     prefix = f"RL_{job_id}_"
     if mode != "no_frames":
@@ -131,13 +140,14 @@ def optimize(data_dir: Path, common: Path, kv: dict[str, str], params: dict[str,
             lines.append(json.dumps({
                 "pass": pass_no, "format": 3, "inputs": [f"{a}={v}" for a, v in zip(names, combo, strict=True)]
                 + ["InpLots=0.01"], "stats": stats,
-                "tracking": {"equity_peak": deposit + 6, "equity_min": deposit - 4, "equity_max_dd": 7.5,
+                "tracking": {"equity_peak": deposit + 6, "equity_min": -1.0 if bankrupt(combo) else deposit - 4,
+                             "equity_max_dd": 7.5,
                              "equity_max_dd_pct": 0.075, "max_floating_loss": -3.0, "max_positions": 1,
                              "max_lots": 0.01, "min_margin_level": None, "stop_out_deals": 0},
                 "ticks": 5000, "first_tick": f"{start:%Y.%m.%d} 00:05:00",
                 "last_tick": f"{end - dt.timedelta(days=1):%Y.%m.%d} 22:00:00", "bars": 100, "days": 3}))
             for k, day in enumerate(days, start=1):
-                eq = deposit + profit * k / 3
+                eq = deposit + profit * k / 3 + (0.5 * (k % 2) if trades and k < 3 else 0.0)
                 if mode == "bad_daily" and k == 3:
                     eq += 1
                 daily.append(f"{pass_no},{day:%Y.%m.%d},{eq:.2f},{eq:.2f},{eq - 1:.2f},{eq + 1:.2f},1,100")
