@@ -849,7 +849,7 @@ lot = floor_to_lot_step( f_final × Equity / RiskPerLot )
 |---|---|
 | **テスト開始** | (1) Holdout Guard 検査 → (2) ini/.set 生成（ジョブ専用ディレクトリ）→ (3) EA の .ex5 ハッシュ照合（意図した版か）→ (4) 出力先の古いファイル削除 → (5) `terminal64.exe /portable /config:…` を起動し PID を記録、状態 RUNNING |
 | **開始検知** (C14, C29) | 起動後、一定時間内に**端末ログ**（`<データフォルダ>\logs\YYYYMMDD.log`、UTF-16LE、タブ区切り、日付ごとの追記型）へ `automatic testing started` が出なければ `FAILED_TO_START`。ログは起動直前のファイルサイズ以降だけを読む（日付をまたいだら翌日のファイルも読む）。本文は UI 言語によらず英語 [S-HW-P1] |
-| **完了検知** | 単一テスト (C22, C29): ① プロセス終了、② 端末ログの `last test passed with result "successfully finished"`、③ **Telemetry 完了マーカー**、④ 整合性チェック合格、の AND。HTML レポートは解析しない（存在すれば原本として保存するだけ。UI 言語で出力されるため解析に不向き）。終了コードは 0 でも成功の根拠にしない。最適化（将来）は ①③ ＋ XML の存在と「期待パス数 = 実パス数」 |
+| **完了検知** | 単一テスト (C22, C29): ① プロセス終了、② 端末ログの `last test passed with result "successfully finished"`、③ **Telemetry 完了マーカー**、④ 整合性チェック合格、の AND。HTML レポートは解析しない（存在すれば原本として保存するだけ。UI 言語で出力されるため解析に不向き）。終了コードは 0 でも成功の根拠にしない。最適化 (C40, C41): ① プロセス終了、② 端末ログの最適化完了行（文言は実機確認）、③ Frames 回収後の完了マーカー、④ **期待パス数 = Frames の受信数 = XML の行数**、⑤ パラメータの組が期待集合と一致、の AND。欠けたら `PARTIAL` |
 | **自動アップデート** (C35, C36) | 起動した端末が LiveUpdate に処理を渡して（端末ログ `LiveUpdate start "...liveupdate\terminal64.exe" /update ... /config:"<ini>"`）すぐ終了し、更新後の端末が同じ ini で自動的に再起動されることがある [S-HW-P1-E2E]。この場合は失敗にせず、再起動された端末の終了まで待って通常どおり判定し、警告 `TERMINAL_UPDATED`（ビルドの推移）を記録する (C35)。また、同じ端末のプロセスが 1 つでも動いている間は判定・後片付けをしない。タイムアウト時はそれらも強制終了する (C36) |
 | **結果取得** | Collection が XML/HTML とテレメトリ（共通フォルダ `FILE_COMMON` 配下のジョブ別ファイル）を読み取り、Artifact Store にコピー＆ハッシュ化 |
 | **タイムアウト** | ジョブごとに推定時間（過去の 1 パス平均 × パス数 × 安全係数）から上限を設定。加えて**ハートビート**（テスターログ・エージェントログの更新時刻）が一定時間止まったらハング判定。超過時はプロセスツリーごと強制終了（psutil）→ `TIMED_OUT` |
@@ -919,7 +919,7 @@ EA に 1 行 `#include` するだけで以下を提供する共通部品（EA �
 |---|---|---|---|---|
 | Study 凍結・Holdout Guard・追記型保存・理由コード | ✅ | | | 後から追加不可能な「土台」。最初に入れないと履歴が汚れる |
 | ini/コマンドライン実行・Terminal Pool（1〜2 インスタンス） | ✅ | 多インスタンス | | |
-| Telemetry（日次エクイティ・取引・最大含み損・完了マーカー） | ✅ | パス別 Frames | | 自前指標計算と完了検知に必須 |
+| Telemetry（日次エクイティ・取引・最大含み損・完了マーカー） | ✅ | パス別 Frames（P3 に前倒し、C40） | | 自前指標計算と完了検知に必須 |
 | MetricEngine（自前再計算） | ✅ | | | |
 | 戦略プロファイル・PSR 取引数ゲート | ✅ | | | 一律基準の回避 |
 | 近傍ロバストネス（グリッド既存パス）・Robust Score | ✅ | 摂動自動生成 | Sobol 感度 | 費用対効果最大 |
@@ -1097,7 +1097,7 @@ rlab ledger  <strategy_family>            # 試行回数台帳
 | **P0 土台** | Core（ID・理由コード）、Config（スキーマ・凍結）、Storage（SQLite・Artifact・マイグレーション）。**P1 に必要な最小限（ID・保存・分割定義の固定）は P1 で先に実装する** (C18) | ID 決定性のプロパティテスト通過、凍結後変更が拒否される |
 | **P1 単一テスト実行** | MT5 Adapter（ini 生成・起動・開始/完了検知・タイムアウト・ログ収集）、Fake Terminal、Holdout Guard（最小版）、**Telemetry の終了時出力（約定・統計・実行環境・完了マーカー）** (C18)。詳細は [plans/P1_PLAN.md](plans/P1_PLAN.md) | CLI から 1 本の単一テストを実行し、整合性チェックに合格した結果だけが保存される。Holdout 違反が拒否される |
 | **P2 Telemetry と指標** | Telemetry.mqh の拡張（日次エクイティ・最大含み損・最大ポジション・固定ロット）、Collection、MetricEngine | 自前指標と MT5 原値の差異が説明可能な範囲。期間別パフォーマンスが出る |
-| **P3 最適化と収集** | 最適化ジョブ（完全グリッド・チャンク分割）、XML 取込、Trial Ledger | 1,000 パス規模の最適化を取込み、期待パス数と一致 |
+| **P3 最適化と収集** | 最適化ジョブ（完全グリッド・チャンク分割、既定 2,000 パス/ジョブ）、**パス別 Frames（統計＋日次エクイティ、C40）**、XML は照合のみ（C41）、Trial Ledger（C44） | 1,000 パス規模の最適化を取込み、期待パス数と一致 |
 | **P4 フィルタ** | 戦略プロファイル、PSR ゲート、全ゲート記録 | `why-not` で全除外理由が表示される |
 | **P5 ロバストネス** | 近傍統計・Robust Score・Region・コストストレス（事後）・サブ期間・利益集中 | 合成データで孤立ピークを選ばないことを確認 |
 | **P6 統計** | PSR / DSR / Bootstrap CI | 論文数値例と一致 |
@@ -1106,7 +1106,7 @@ rlab ledger  <strategy_family>            # 試行回数台帳
 | **P9 リスクと配分** | Risk MC、fixed / dd_constrained / fractional_kelly、ロット変換 | binding_constraint が記録され、min lot 未満は INFEASIBLE |
 | **P10 帰無仮説テスト** | §19.3 のパイプライン偽陽性率測定 | 偽陽性率が許容範囲 ← **ここまでが MVP** |
 | P11 自動連結 | Pipeline Runner・Resume | 途中停止→再開で結果が一致 |
-| P12 Phase 2 統計 | パス別 Frames、PBO（R `pbo` からの移植）、N_eff、StepM（arch）、摂動自動生成 | PBO が R `pbo` 1.3.5 と同じ入力で数値一致する |
+| P12 Phase 2 統計 | PBO（R `pbo` からの移植）、N_eff、StepM（arch）、摂動自動生成 | PBO が R `pbo` 1.3.5 と同じ入力で数値一致する |
 | P13 ポートフォリオ | 相関・同時 DD・全体 MC・スケール係数 | |
 | P14 将来 | SPA、再シミュレーション・コストストレス、Live Monitoring、ベイズ更新、HRP | |
 
