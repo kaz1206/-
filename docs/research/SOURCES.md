@@ -39,7 +39,7 @@
 | S-PBO-R | CRAN `pbo` 1.3.5（MIT, Matt Barry） https://github.com/cran/pbo | CSCV の参照実装: T×N 行列、S は T を割り切る、`combn(S, S/2)`、IS の最良 → OOS での順位 → logit | **A**（ソース確認） |
 | S-PYPBO | `esvhd/pypbo` の README | PBO/PSR/DSR/MinTRL の Python 実装。**PyPI 未登録。README に「Add test cases」が TODO と記載** | A（README） |
 | S-SKFOLIO-CPCV | skfolio `CombinatorialPurgedCV` https://skfolio.org/generated/skfolio.model_selection.CombinatorialPurgedCV.html | 既存の CPCV 実装 | C（検索経由） |
-| S-PA-R | R PerformanceAnalytics の `ProbSharpeRatio`, `MinTrackRecord` | PSR/MinTRL の既存実装（テストの検算に使える） | C |
+| S-PA-R | R PerformanceAnalytics 2.1.0（CRAN、2026-04-11）`R/ProbSharpeRatio.R`・`R/MinTRL.R`（CRAN の GitHub ミラー https://github.com/cran/PerformanceAnalytics で 2026-10-11 に確認） | PSR = pnorm((sr − refSR)·√(n−1) / √(1 − sr·sk + sr²·(kr−1)/4))、MinTRL = 1 + (1 − sk·sr + (kr−1)/4·sr²)·(qnorm(p)/(sr − refSR))²。sr は `SharpeRatio(..., "StdDev")`、kr は `kurtosis(method="moment")`（超過でない）。**既定値は `ignore_kurtosis = TRUE`（kr = 3 に固定）**。例: `sr = 2/√12, refSR = 1/√12, sk = −0.72, kr = 5.78, n = 59` | **A**（ソース確認） |
 | S-QUANTSTRAT | R quantstrat の `haircutSharpe` / `profitHurdle` | Harvey-Liu の既存実装 | C |
 | S-CC-MEMORY | Claude Code Docs「How Claude remembers your project」 https://code.claude.com/docs/en/memory | プロジェクトの `CLAUDE.md` は VCS で共有する。**1 ファイル 200 行未満が目安**。検証可能な具体的指示で書く。`@path` インポート（コンテキスト量は減らない）。`.claude/rules/` は `paths` フロントマター付き。CLAUDE.md はあくまで文脈であり強制力のある設定ではない（強制したい場合は hooks） | **A** |
 | S-PYPI-VERS | PyPI JSON API（2026-10-08 時点） | 各ライブラリの最新版（`FINDINGS.md` §4） | **A** |
