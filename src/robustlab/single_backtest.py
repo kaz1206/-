@@ -42,6 +42,9 @@ class Outcome:
 
 class Workspace:
     def __init__(self, root: Path):
+        # Absolute, because the terminal runs with its own folder as the working directory and
+        # would resolve a relative /config path there (found in the first hardware E2E run).
+        root = root.resolve()
         self.root = root
         self.db = Database(root / "robustlab.sqlite")
         self.store = ArtifactStore(root / "artifacts", self.db)

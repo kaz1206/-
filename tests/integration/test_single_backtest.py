@@ -154,3 +154,13 @@ def test_unexpected_error_is_recorded_not_left_running(env):
     assert out.exit_code == EXIT_RUNTIME and out.status == "INTERNAL_ERROR"
     j = jobs(env)[0]
     assert j["status"] == "INTERNAL_ERROR" and "PermissionError" in j["error_detail"]
+
+
+def test_relative_workspace_path_works(env, monkeypatch):
+    # Regression (first hardware E2E): a relative workspace made the /config path relative, and the
+    # terminal (working directory = its own folder) could not find the ini -> FAILED_TO_START.
+    monkeypatch.chdir(env.ws.parent)
+    monkeypatch.setenv("FAKE_MODE", "ok")
+    from robustlab.single_backtest import run_backtest
+    out = run_backtest(env.req, env.terminal_cfg, env.partition, Path(env.ws.name))
+    assert out.status == "SUCCEEDED", out

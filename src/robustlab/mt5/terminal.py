@@ -121,6 +121,8 @@ def kill_tree(pid: int) -> None:
 
 
 def _launch(terminal_path: Path, ini_path: Path) -> subprocess.Popen:
+    # The terminal's working directory is its own folder, so every path must be absolute.
+    terminal_path, ini_path = terminal_path.resolve(), ini_path.resolve()
     if os.name == "nt":
         # Exactly the quoting verified on hardware: /config:"<path>"
         cmd = f'"{terminal_path}" /portable /config:"{ini_path}"'
