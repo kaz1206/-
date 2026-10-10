@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 from scipy import stats as sstats
 
-METRIC_DEF_VERSION = "m1"
+METRIC_DEF_VERSION = "m2"  # m2: longest-run ties take the LAST run (H2, C38)
 
 DEAL_BUY, DEAL_SELL, DEAL_BALANCE = 0, 1, 2
 ENTRY_IN, ENTRY_OUT, ENTRY_INOUT, ENTRY_OUT_BY = 0, 1, 2, 3
@@ -41,7 +41,11 @@ def _ordered(deals: list[dict[str, str]]) -> list[dict[str, str]]:
 
 
 def _streaks(pnls: list[float]) -> tuple[int, float, int, float]:
-    """Longest win run (count, amount of that run) and loss run. Zero P/L breaks both runs."""
+    """Longest win run (count, amount of that run) and loss run. Zero P/L breaks both runs.
+
+    When several runs share the maximal length, the LAST one is used (m2, H2): this matches MT5 on
+    both hardware data sets (P2_PLAN §12). "Largest amount" would match them too; still undecided.
+    """
     best_w = best_l = cur_w = cur_l = 0
     amt_w = amt_l = run_w = run_l = 0.0
     for x in pnls:
@@ -52,9 +56,9 @@ def _streaks(pnls: list[float]) -> tuple[int, float, int, float]:
         else:
             cur_w = cur_l = 0
             run_w = run_l = 0.0
-        if cur_w > best_w:
+        if cur_w and cur_w >= best_w:
             best_w, amt_w = cur_w, run_w
-        if cur_l > best_l:
+        if cur_l and cur_l >= best_l:
             best_l, amt_l = cur_l, run_l
     return best_w, amt_w, best_l, amt_l
 

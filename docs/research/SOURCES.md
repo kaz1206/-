@@ -46,6 +46,8 @@
 
 | S-HW-P1-E2E | 実機 E2E（2026-10-10）: P1 本体の `rlab backtest run` を `C:\MT5_verify` で実行。端末ログ | 相対パスの `/config` は `cannot load config ... at start` で失敗する。起動時に保留中のアップデートがあると、LiveUpdate が `/update ... /config:<ini>` を引き継いで端末を終了し、約 15 秒後に更新後の端末（6230 → 6251）が同じ ini で再起動してテストを完了する | **A**（実機観測） |
 
+| S-HW-P2 | 実機確認（2026-10-10）: Telemetry v2、`RL_SmokeTest` EURUSD H1 2023 年、build 6251。`rlab metrics show` の照合表と約定一覧（`tests/fixtures/hw_20261010`） | `STAT_MAX_CONWINS` 等の意味（金額と回数）、最長の連続が複数あるときの MT5 の選び方、エクイティ DD の差（0.26%）、Telemetry v2 の所要時間（+16%）、MT5 シャープ ≈ 日次シャープ × √(日数) | **A**（実機観測） |
+
 ## 2. 原著論文・学術資料
 
 | ID | 書誌情報 | 用途 | レベル |

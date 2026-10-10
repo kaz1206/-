@@ -13,8 +13,8 @@ def stats_values(**over):
         "initial_deposit": 10000.00, "profit": 9.69, "gross_profit": 32.01, "gross_loss": -22.32,
         "trades": 32.0, "deals": 64.0, "balance_dd": 7.43, "equity_dd": 5.07, "profit_factor": 1.43,
         "expected_payoff": 0.30, "recovery_factor": 1.91, "sharpe_ratio": 14.51,
-        "profit_trades": 16.0, "loss_trades": 16.0, "max_conwins": 6.0, "max_conprofit_trades": 5.14,
-        "max_conlosses": 3.0, "max_conloss_trades": -1.23,
+        "profit_trades": 16.0, "loss_trades": 16.0, "max_conwins": 5.14, "max_conprofit_trades": 6.0,
+        "max_conlosses": -1.23, "max_conloss_trades": 3.0,
     }
     v.update(over)
     return v

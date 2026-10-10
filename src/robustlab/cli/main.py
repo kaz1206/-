@@ -168,6 +168,7 @@ def metrics_compute(job_id: str | None = typer.Argument(None, help="Job to compu
 
 @metrics_app.command("show")
 def metrics_show(run_id: str, job: str | None = typer.Option(None, "--job", help="Default: latest SUCCEEDED job"),
+                 version: str | None = typer.Option(None, "--version", help="Metric definition version (default: current)"),
                  workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
     from robustlab.metrics import store as metrics_store
 
@@ -180,7 +181,7 @@ def metrics_show(run_id: str, job: str | None = typer.Option(None, "--job", help
                 typer.echo(f"no SUCCEEDED job for {run_id}", err=True)
                 raise typer.Exit(1)
             job = row["job_id"]
-        sm = metrics_store.load(db, job)
+        sm = metrics_store.load(db, job, version)
         if sm is None:
             typer.echo(f"no metrics for {job}; run: rlab metrics compute {job}", err=True)
             raise typer.Exit(1)

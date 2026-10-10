@@ -35,14 +35,14 @@ def _artifact_text(db: Database, store: ArtifactStore, job_id: str, role: str) -
     return store.read(row["sha256"]).decode("utf-8-sig") if row else None
 
 
-def load(db: Database, job_id: str) -> StoredMetrics | None:
-    row = db.one("SELECT * FROM run_metrics WHERE job_id = ? AND metric_def_version = ?",
-                 (job_id, engine.METRIC_DEF_VERSION))
+def load(db: Database, job_id: str, version: str | None = None) -> StoredMetrics | None:
+    version = version or engine.METRIC_DEF_VERSION
+    row = db.one("SELECT * FROM run_metrics WHERE job_id = ? AND metric_def_version = ?", (job_id, version))
     if row is None:
         return None
     checks = [dict(r) for r in db.all(
         "SELECT name, ours, mt5, diff, status FROM metric_check WHERE job_id = ? AND metric_def_version = ? "
-        "ORDER BY name", (job_id, engine.METRIC_DEF_VERSION))]
+        "ORDER BY name", (job_id, version))]
     return StoredMetrics(job_id, row["metric_def_version"], False, json.loads(row["metrics_json"]),
                          json.loads(row["unavailable_json"]), checks)
 

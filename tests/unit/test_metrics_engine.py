@@ -11,8 +11,8 @@ DEALS = list(csv.DictReader(open(FIXTURE_DEALS, encoding="utf-8")))
 # Values from the MT5 report of the same run (R1, 2026-10-09)
 MT5 = {"profit": 9.69, "gross_profit": 32.01, "gross_loss": -22.32, "trades": 32.0, "profit_trades": 16.0,
        "loss_trades": 16.0, "profit_factor": 1.43, "expected_payoff": 0.30, "balance_dd": 7.43,
-       "equity_dd": 5.07, "recovery_factor": 1.91, "sharpe_ratio": 14.51, "max_conwins": 6.0,
-       "max_conlosses": 3.0, "max_conprofit_trades": 5.14, "max_conloss_trades": -1.23}
+       "equity_dd": 5.07, "recovery_factor": 1.91, "sharpe_ratio": 14.51, "max_conwins": 5.14,
+       "max_conlosses": -1.23, "max_conprofit_trades": 6.0, "max_conloss_trades": 3.0}
 TRACKED = {"equity_peak": 10013.0, "equity_max_dd": 5.07, "equity_max_dd_pct": 0.05, "max_floating_loss": -4.0,
            "max_positions": 2, "max_lots": 0.02, "min_margin_level": 92255.3, "stop_out_deals": 0, "equity_min": 9995.0}
 
@@ -83,3 +83,26 @@ def test_longest_runs_lists_every_tie():
     r = engine.longest_runs(ds)
     assert [x["amount"] for x in r["wins"]] == [3.0, 6.0]
     assert r["most_wins_amount"][0]["amount"] == 6.0 and r["losses"][0]["length"] == 1
+
+
+# --- m2: 2023 E2E data (two longest win runs; equity DD differs slightly from MT5) -----------------
+E2E_DEALS = list(csv.DictReader(open(FIXTURE_DEALS.parents[1] / "hw_20261010" / "deals.csv", encoding="utf-8")))
+E2E_MT5 = {"profit": 47.16, "gross_profit": 335.07, "gross_loss": -287.91, "trades": 155.0, "profit_trades": 62.0,
+           "loss_trades": 93.0, "profit_factor": 1.16, "expected_payoff": 0.30, "balance_dd": 70.69,
+           "equity_dd": 85.11, "recovery_factor": 0.55, "sharpe_ratio": 0.57, "max_conwins": 19.99,
+           "max_conprofit_trades": 4.0, "max_conlosses": -29.35, "max_conloss_trades": 10.0}
+E2E_TRACKED = {**TRACKED, "equity_max_dd": 85.33}
+
+
+def test_e2e_2023_matches_mt5_with_last_longest_run_and_approx_equity_dd():
+    r = engine.compute(E2E_DEALS, initial_deposit=10000.0, tracked=E2E_TRACKED)
+    rows = {c["name"]: c["status"] for c in compare.compare(r.metrics, E2E_MT5)}
+    assert r.metrics["max_consec_wins_amount"] == 19.99  # the LAST of the two length-4 runs (H2)
+    assert rows["equity_max_dd"] == "APPROX_MATCH"  # 85.33 vs 85.11 (H3)
+    others = {k: v for k, v in rows.items() if k not in ("equity_max_dd", "daily_sharpe")}
+    assert set(others.values()) == {"MATCH"}, others
+
+
+def test_approx_match_has_a_limit():
+    rows = {c["name"]: c["status"] for c in compare.compare({"equity_max_dd": 90.0}, {"equity_dd": 85.11})}
+    assert rows["equity_max_dd"] == "MISMATCH"
