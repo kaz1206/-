@@ -162,15 +162,15 @@
 
 - [x] `Model`: **4 = リアルティック、1 = M1 OHLC を実機で確認**（0/2/3 は未確認）[S-HW-P1]
 - [ ] `ExecutionMode`（遅延）の値の意味と、ランダム遅延の指定方法 V（P1 は 0 のみ使用。後回し）
-- [~] `Optimization=0` で単一テストになることは確認 [S-HW-P1]。1/2/3 と `ForwardMode` は未確認 V
+- [~] `Optimization=0` で単一テスト、**`Optimization=1` で完全グリッド最適化**を確認 [S-HW-P1][S-HW-P3]。2/3 と `ForwardMode` は未確認 V
 - [x] `Report` は端末データフォルダ（ポータブルではインストール先）直下に `.htm`（UTF-16LE）＋PNG 4 枚。UI 言語で出力される [S-HW-P1]
 - [x] `[Tester] ShutdownTerminal=1` で自動終了、終了コード 0 [S-HW-P1]
-- [ ] `FrameAdd` で送れる 1 フレームのサイズ上限（日次損益 × 年数 × 8 バイトが収まるか） V
+- [x] `FrameAdd` で 1 フレーム約 161 KB（20,145 double）を送れる。上限そのものは未確認だが、日次データ（10 年で約 40 KB）には十分 [S-HW-P3]
 - [x] ローカルエージェントから `FILE_COMMON`（`%APPDATA%\MetaQuotes\Terminal\Common\Files`）に書ける [S-HW-P1]
 - [x] 単一テストは同条件の再実行でも EA が実際に再実行される（キャッシュで省略されない）[S-HW-P1]
-- [ ] 単一テストと、最適化の同じパスとで結果が一致するか（Real ticks、遅延 0） V
-- [ ] `OnTester` の戻り値を、カスタム最適化基準として XML に出力できるか V
-- [ ] 最適化に関する項目（`Optimization=1`、完了ログ、XML の形式、Frames の回収・サイズ、キャッシュ、クラウド無効化、単一テストとの一致）は `verification/p3/RECORD.md` の X1〜X10 で確認する V
+- [~] 単一テストと最適化の同じパスは **M1 OHLC で完全一致** [S-HW-P3]。Real ticks は P3 の E2E で確認 V
+- [x] `OnTester` の戻り値は XML の `Custom` 列に常に出る。`OptimizationCriterion=6` で `Result` 列もカスタム値になる [S-HW-P3]
+- [x] 最適化に関する項目（完了ログ、XML の形式、Frames の回収・サイズ、キャッシュ、クラウド無効化、単一テストとの一致）は `verification/p3/RECORD.md` の X1〜X10 で確認した [S-HW-P3]
 
 ---
 

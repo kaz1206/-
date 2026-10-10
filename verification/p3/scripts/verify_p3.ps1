@@ -88,6 +88,9 @@ function Protect-Text([string]$t) {
   }
   $t = $t -replace "(?<=')\d{5,12}(?=')", "<login>"
   $t = $t -replace "(?i)(login\D{0,5})\d{5,12}", '$1<login>'
+  $t = $t -replace "(?i)(performed from )\S+", '$1<ip>'
+  $t = $t -replace "\b(?:[0-9A-Fa-f]{1,4}:){3,7}[0-9A-Fa-f]{1,4}\b", "<ip>"
+  $t = $t -replace "(?i)\b[0-9a-f]{0,4}(?::[0-9a-f]{0,4})*::[0-9a-f:]*", "<ip>"
   $t = $t -replace "\b(\d{1,3}\.){3}\d{1,3}\b", "<ip>"
   return $t
 }
