@@ -9,6 +9,7 @@ P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
+- P5 計画（承認待ち）: `docs/plans/P5_PLAN.md`
 - P4 計画（完了、C51〜C55）: `docs/plans/P4_PLAN.md`、PSR の入力定義: `docs/metrics_definitions.md`、プロファイル: `configs/strategy_profiles.yaml`
 - P3 計画（完了、C40〜C50）: `docs/plans/P3_PLAN.md`、実機確認: `verification/p3/RECORD.md`、E2E 手順: `docs/runbooks/P3_E2E.md`
 - P1 計画（§15 が確定事項）: `docs/plans/P1_PLAN.md`、実機確認の記録: `verification/p1/RECORD.md`
