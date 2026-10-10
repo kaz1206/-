@@ -48,6 +48,24 @@ def build_set_text(inputs: list[InputSpec], normalized: dict[str, int | bool | s
     return "\r\n".join(lines) + "\r\n"
 
 
+def build_opt_set_text(inputs: list[InputSpec], fixed: dict[str, int | bool | str], axes, job_id: str) -> str:
+    """Optimization .set: axes as name=start||start||step||stop||Y, the rest fixed with ||N (X9, [S-HW-P3])."""
+    by_name = {a.name: a for a in axes}
+    lines = []
+    for spec in inputs:
+        if spec.name in by_name:
+            a = by_name[spec.name]
+            lines.append(f"{spec.name}={a.start}||{a.start}||{a.step}||{a.stop}||Y")
+            continue
+        v = _fmt(fixed[spec.name])
+        if spec.type is InputType.STRING:
+            lines.append(f"{spec.name}={v}")
+        else:
+            lines.append(f"{spec.name}={v}||{v}||{_STEP[spec.type]}||{v}||N")
+    lines.append(f"{HARNESS_JOB_INPUT}={job_id}")
+    return "\r\n".join(lines) + "\r\n"
+
+
 def encode_set(text: str) -> bytes:
     return codecs.BOM_UTF16_LE + text.encode("utf-16-le")
 
@@ -74,7 +92,10 @@ def build_ini_text(
     to_date: dt.date,
     tester: TesterSettings,
     job_id: str,
+    optimization: bool = False,
 ) -> str:
+    # Optimization=1 is the full grid (X1). OptimizationCriterion is deliberately not set: the XML
+    # "Result" column depends on it and is not used (C49).
     lines = [
         "[Tester]",
         f"Expert={expert}",
@@ -83,7 +104,7 @@ def build_ini_text(
         f"Period={timeframe}",
         f"Model={MODEL_CODES[tester.model]}",
         f"ExecutionMode={tester.execution_delay_ms}",
-        "Optimization=0",
+        f"Optimization={1 if optimization else 0}",
         "ForwardMode=0",
         f"FromDate={_mt5_date(from_date)}",
         f"ToDate={_mt5_date(to_date)}",

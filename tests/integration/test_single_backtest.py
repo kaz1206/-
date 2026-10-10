@@ -198,12 +198,12 @@ def jobs_warnings(env):
 
 
 # --- P2: telemetry v2 and metrics --------------------------------------------------------------
-def _v2_request(env):
+def _v2_request(env, version="2"):
     s = (env.req.parent.parent / "strategies" / "smoke.yaml")
-    s2 = s.with_name("smoke2.yaml")
-    s2.write_text(s.read_text().replace('telemetry_version: "1"', 'telemetry_version: "2"'))
-    r2 = env.req.with_name("r2.yaml")
-    r2.write_text(env.req.read_text().replace("smoke.yaml", "smoke2.yaml"))
+    s2 = s.with_name(f"smoke{version}.yaml")
+    s2.write_text(s.read_text().replace('telemetry_version: "1"', f'telemetry_version: "{version}"'))
+    r2 = env.req.with_name(f"r{version}.yaml")
+    r2.write_text(env.req.read_text().replace("smoke.yaml", f"smoke{version}.yaml"))
     return r2
 
 
@@ -211,9 +211,10 @@ def _db(env):
     return Database(env.ws / "robustlab.sqlite")
 
 
-def test_v2_job_gets_metrics_that_match_mt5(env, monkeypatch):
-    monkeypatch.setenv("FAKE_TELEMETRY_VERSION", "2")
-    out = env.run(req=_v2_request(env))
+@pytest.mark.parametrize("version", ["2", "3"])
+def test_v2_job_gets_metrics_that_match_mt5(env, monkeypatch, version):
+    monkeypatch.setenv("FAKE_TELEMETRY_VERSION", version)
+    out = env.run(req=_v2_request(env, version))
     assert out.status == "SUCCEEDED", out
     assert "MISMATCH" not in (out.details["metric_checks"] or "") and "MATCH" in out.details["metric_checks"]
     db = _db(env)

@@ -59,18 +59,20 @@ def _sha_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def sweep_abandoned(db: Database) -> list[str]:
+def sweep_abandoned(db: Database, table: str = "job") -> list[str]:
     """Mark jobs left RUNNING/PREPARING by a crashed rlab process as ABANDONED (P1_PLAN §6)."""
+    if table not in ("job", "opt_job"):
+        raise ValueError(table)
     changed = []
     now = dt.datetime.now(dt.UTC)
-    for row in db.all("SELECT job_id, status, pid, created_at FROM job WHERE status IN ('RUNNING','PREPARING')"):
+    for row in db.all(f"SELECT job_id, status, pid, created_at FROM {table} WHERE status IN ('RUNNING','PREPARING')"):
         stale = False
         if row["status"] == "RUNNING":
             stale = row["pid"] is None or not psutil.pid_exists(row["pid"])
         else:
             stale = now - dt.datetime.fromisoformat(row["created_at"]) > ABANDON_PREPARING_AFTER
         if stale:
-            db.update_job(row["job_id"], status=JobStatus.ABANDONED.value, finished_at=now_iso(),
+            db.update_job(row["job_id"], table=table, status=JobStatus.ABANDONED.value, finished_at=now_iso(),
                           error_class="ABANDONED", error_detail="rlab exited while the job was in progress")
             changed.append(row["job_id"])
     return changed

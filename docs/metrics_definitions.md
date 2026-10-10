@@ -3,7 +3,21 @@
 実装: `src/robustlab/metrics/engine.py`（純粋関数）、照合: `src/robustlab/metrics/compare.py`。
 定義を変えたら `METRIC_DEF_VERSION` を上げ、本書に新しい版の節を追加する（古い計算結果は消さない）。
 
-## m2（2026-10-10、現行）
+## p1（2026-10-10、最適化パス用、現行）
+
+最適化の各パス（`pass_result`）の指標。パスごとの約定一覧はないので、m2 とは入力が違う（P3_PLAN §3.4）。
+
+| 区分 | 指標 | 出所 |
+|---|---|---|
+| 取引 | `net_profit`、`trades`、`win_trades`/`loss_trades`、`gross_profit`/`gross_loss`、`profit_factor`、`expected_payoff`、`win_rate`、`max_consec_wins`(+`_amount`)、`max_consec_losses`(+`_amount`)、`balance_max_dd`、`final_balance` | Frames で送った `TesterStatistics`。**P2 で約定データからの自前計算と MT5 の値が一致すると確認できた指標だけ**を使う（「研究に使う値は自前で計算」の例外。根拠 S-HW-P1、S-HW-P2）。連勝・連敗は H1（C37）の対応 |
+| エクイティ | `equity_max_dd`、`equity_max_dd_pct`、`equity_peak`、`recovery_factor`、`max_floating_loss`、`max_positions`、`max_lots`、`min_margin_level`、`stop_out_deals`、`bankrupt` | EA のティック単位の追跡値（m2 と同じ定義） |
+| 日次 | `days`、`daily_mean_return`、`daily_std_return`、`daily_sharpe`、`daily_skewness`、`daily_kurtosis` | 日次エクイティから自前で計算（m2 と同じコード `daily_metrics`） |
+
+m2 にあって p1 にない指標: `inout_deals`、`distinct_volumes`、`fixed_lot`、`balance_max_dd_pct`、`balance_max_dd_days`、期間別の成績（約定一覧が必要なもの）。必要な候補は単一テストで再実行して m2 で計算する。
+
+照合: 各パスの `net_profit` と `trades` を XML レポートの `Profit`・`Trades` と突き合わせ、1 件でも違えばジョブを SUCCEEDED にしない（C49）。
+
+## m2（2026-10-10、単一テスト用、現行）
 
 m1 からの変更点だけを書く（それ以外は m1 と同じ）。根拠は実機データ（`tests/fixtures/hw_20261009`、`hw_20261010`）。
 

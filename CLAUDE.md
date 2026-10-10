@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2・指標の自前計算 MetricEngine m2）は完了（2026-10-10 実機確認合格）。
+P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2・指標の自前計算 MetricEngine m2）は完了（2026-10-10 実機確認合格）。P3（完全グリッド最適化・全パス取込・試行回数台帳）は実装済みで、実機 E2E（`docs/runbooks/P3_E2E.md`）待ち。
 
 ## 主要ドキュメント
 
@@ -9,7 +9,7 @@ P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
-- P3 計画（承認済み、C40〜C45）: `docs/plans/P3_PLAN.md`、実機確認: `verification/p3/`
+- P3 計画（承認済み、C40〜C49）: `docs/plans/P3_PLAN.md`、実機確認: `verification/p3/RECORD.md`
 - P1 計画（§15 が確定事項）: `docs/plans/P1_PLAN.md`、実機確認の記録: `verification/p1/RECORD.md`
 - P2 計画: `docs/plans/P2_PLAN.md`、指標定義: `docs/metrics_definitions.md`
 
@@ -54,6 +54,7 @@ P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2
 - 依存関係: `uv sync`（ロックファイル `uv.lock`。Python 3.12/3.13）
 - テスト: `uv run pytest`（Linux で全テストが動く。MT5 は偽の端末 `tests/integration/fake_terminal.py` で代替）
 - CLI: `uv run rlab backtest run <request.yaml> [--rerun]` / `rlab backtest show <run_id>` / `rlab jobs list` / `rlab metrics compute <job_id|--all>` / `rlab metrics show <run_id>`
+- CLI（P3）: `rlab optimize run <study.yaml> [--rerun]` / `rlab optimize show <round_id>` / `rlab optimize pass <round_id> <candidate_id>` / `rlab trials show <strategy_family>`
 - 終了コード: 0 成功、1 設定・入力エラー、2 実行時の失敗、3 Holdout Guard による拒否
 
 ## 実装上の約束（P1）
@@ -61,4 +62,6 @@ P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2
 - `verification/` は実機確認専用。P1 本体（`src/`、`mql5/`）から参照しない。
 - `.set` は UTF-16LE＋BOM、ini は ASCII（実機で確認した形式。変更する場合は実機確認から）。
 - 成功の判定は「端末ログの成功行＋完了マーカー＋整合性チェック」のすべて。どれかが欠けたら SUCCEEDED にしない。
+- 最適化の成功は「テスターログの完了行（期待パス数）＋エージェント内訳 remote 0・cloud 0＋Frames の完了マーカーと全パス＋XML との照合」のすべて（C46〜C49）。最適化の前に対象 EA の `.opt` キャッシュを削除する。
+- EA は最適化で `INIT_PARAMETERS_INCORRECT` を返さない（そのパスはフレームを送らず欠落扱いになる）。無効な組合せは「取引しないパス」として走らせる。
 - `workspace/` のログには口座番号と IP が含まれる。CLI でログ本文を表示しない。リポジトリにコミットしない。

@@ -45,6 +45,7 @@ class JobStatus(str, enum.Enum):
     QUARANTINED = "QUARANTINED"
     ABANDONED = "ABANDONED"
     INTERNAL_ERROR = "INTERNAL_ERROR"  # unexpected exception in rlab after the job was created
+    PARTIAL = "PARTIAL"  # optimization: some passes are missing (P3_PLAN §2.1-6)
 
 
 class InputType(str, enum.Enum):
@@ -169,6 +170,70 @@ class BacktestRequest(_Strict):
     def _period(self) -> BacktestRequest:
         if self.from_date >= self.to_date:
             raise ValueError("from_date must be earlier than to_date")
+        return self
+
+
+class AxisSpec(_Strict):
+    """One optimized input: start, step and stop of the MT5 full grid (P3_PLAN §3.1)."""
+
+    start: float
+    step: float
+    stop: float
+
+    @model_validator(mode="after")
+    def _range(self) -> AxisSpec:
+        if not all(math.isfinite(v) for v in (self.start, self.step, self.stop)):
+            raise ValueError("start, step and stop must be finite")
+        if self.step <= 0:
+            raise ValueError("step must be positive")
+        if self.start > self.stop:
+            raise ValueError("start must not exceed stop")
+        return self
+
+
+class StudyRequest(_Strict):
+    """A full-grid MT5 optimization over the Discovery period (P3_PLAN §3)."""
+
+    study_id: str
+    strategy_file: str = Field(description="Strategy YAML path, relative to the study file")
+    strategy_family: str | None = Field(default=None, description="Trial ledger unit; defaults to strategy_name")
+    symbol: str
+    timeframe: str
+    from_date: dt.date
+    to_date: dt.date = Field(description="Exclusive end (MT5 ToDate is not included, W12)")
+    param_space: dict[str, AxisSpec]
+    fixed: dict[str, Any] = Field(default_factory=dict)
+    tester: TesterSettings
+    max_passes_per_job: int = 2000  # J4 / C43
+    coverage_tolerance_days: int = 7
+
+    @field_validator("study_id")
+    @classmethod
+    def _study_id(cls, v: str) -> str:
+        if not v or not v.isascii() or not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("study_id must be ASCII letters, digits, '_' or '-'")
+        return v
+
+    _symbol = field_validator("symbol")(BacktestRequest._symbol.__func__)
+    _timeframe = field_validator("timeframe")(BacktestRequest._timeframe.__func__)
+    _tol = field_validator("coverage_tolerance_days")(BacktestRequest._tol.__func__)
+
+    @field_validator("max_passes_per_job")
+    @classmethod
+    def _max_passes(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("max_passes_per_job must be >= 1")
+        return v
+
+    @model_validator(mode="after")
+    def _shape(self) -> StudyRequest:
+        if self.from_date >= self.to_date:
+            raise ValueError("from_date must be earlier than to_date")
+        if not self.param_space:
+            raise ValueError("param_space needs at least one optimized input")
+        both = sorted(set(self.param_space) & set(self.fixed))
+        if both:
+            raise ValueError(f"inputs both optimized and fixed: {both}")
         return self
 
 

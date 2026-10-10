@@ -1,0 +1,17 @@
+# P3 E2E: full-grid optimization on the Discovery period (P3_PLAN §7).
+# 36 x 29 = 1,044 passes. max_passes_per_job 600 splits it into 2 jobs (20 + 16 values of InpFastPeriod)
+# so that chunking is exercised too. Combinations with fast >= slow run without trading and still count.
+study_id: smoketest_grid_v1
+strategy_file: ../strategies/rl_smoketest.yaml
+symbol: EURUSD
+timeframe: H1
+from_date: 2022-01-03          # [from_date, to_date) in server time
+to_date: 2024-01-01
+param_space:
+  InpFastPeriod: {start: 5, step: 1, stop: 40}
+  InpSlowPeriod: {start: 20, step: 5, stop: 160}
+fixed:
+  InpLots: 0.01
+tester: {model: REAL_TICKS, execution_delay_ms: 0, deposit: 10000, currency: USD, leverage: 100}
+max_passes_per_job: 600
+coverage_tolerance_days: 7

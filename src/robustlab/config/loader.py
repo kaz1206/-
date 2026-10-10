@@ -14,6 +14,7 @@ from robustlab.core.models import (
     BacktestRequest,
     DataPartition,
     StrategySpec,
+    StudyRequest,
     TerminalConfig,
     find_credential_keys,
 )
@@ -73,3 +74,21 @@ def load_request(path: Path) -> LoadedRequest:
     strategy = _parse(StrategySpec, strategy_path, load_yaml(strategy_path))
     request_hash = sha256_hex(canonical_json(request.model_dump(mode="json")))
     return LoadedRequest(request, path.resolve(), strategy, strategy_path, request_hash)
+
+
+@dataclass(frozen=True)
+class LoadedStudy:
+    study: StudyRequest
+    study_path: Path
+    strategy: StrategySpec
+    strategy_path: Path
+    study_hash: str
+
+
+def load_study(path: Path) -> LoadedStudy:
+    data = load_yaml(path)
+    study = _parse(StudyRequest, path, data)
+    strategy_path = (path.parent / study.strategy_file).resolve()
+    strategy = _parse(StrategySpec, strategy_path, load_yaml(strategy_path))
+    study_hash = sha256_hex(canonical_json(study.model_dump(mode="json")))
+    return LoadedStudy(study, path.resolve(), strategy, strategy_path, study_hash)

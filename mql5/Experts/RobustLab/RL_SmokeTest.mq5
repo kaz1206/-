@@ -3,10 +3,12 @@
 //| Tiny deterministic EA used only to check the P1 pipeline         |
 //| (moving-average cross, one position, fixed lot). It has no       |
 //| research value.                                                  |
-//| SAFETY: refuses to run outside the Strategy Tester.              |
+//| SAFETY: trades only inside the Strategy Tester (MQL_TESTER). The |
+//| optimization frame-mode instance on the terminal chart only      |
+//| collects frames: no indicators, OnTick returns at once.          |
 //+------------------------------------------------------------------+
 #property copyright "RobustLab"
-#property version   "1.00"
+#property version   "1.10"
 
 #include <Trade\Trade.mqh>
 #include <RobustLab/Telemetry.mqh>
@@ -21,16 +23,22 @@ CTrade   g_trade;
 int      g_fast = INVALID_HANDLE;
 int      g_slow = INVALID_HANDLE;
 datetime g_bar  = 0;
+bool     g_idle = false;   // fast >= slow: the pass runs but never trades (still a trial, C44)
 
 int OnInit()
   {
+   if(RL_IsFrameMode())
+      return INIT_SUCCEEDED;   // frame collector: never trades (verified pattern, [S-HW-P3])
    if(!RL_IsTester())
      {
       Print("RL_SmokeTest: refused to start - runs only in the Strategy Tester.");
       return INIT_FAILED;
      }
-   if(InpFastPeriod <= 0 || InpSlowPeriod <= InpFastPeriod || InpLots <= 0)
+   if(InpFastPeriod <= 0 || InpSlowPeriod <= 0 || InpLots <= 0)
       return INIT_PARAMETERS_INCORRECT;
+   // Not INIT_PARAMETERS_INCORRECT: in an optimization such a pass would send no frame and be
+   // reported as missing. It runs and simply does not trade.
+   g_idle = (InpSlowPeriod <= InpFastPeriod);
    g_fast = iMA(_Symbol, _Period, InpFastPeriod, 0, MODE_SMA, PRICE_CLOSE);
    g_slow = iMA(_Symbol, _Period, InpSlowPeriod, 0, MODE_SMA, PRICE_CLOSE);
    if(g_fast == INVALID_HANDLE || g_slow == INVALID_HANDLE)
@@ -45,6 +53,8 @@ void OnTick()
    if(!RL_IsTester())
       return;
    RL_TelemetryOnTick();
+   if(g_idle)
+      return;
 
    datetime bar = iTime(_Symbol, _Period, 0);
    if(bar == g_bar)
@@ -70,6 +80,16 @@ void OnTick()
    else
       g_trade.Sell(InpLots, _Symbol);
   }
+
+double OnTester()
+  {
+   RL_TelemetryOnTester();
+   return 0.0;
+  }
+
+void OnTesterInit()   { RL_TelemetryOnTesterInit(); }
+void OnTesterPass()   { RL_TelemetryOnTesterPass(); }
+void OnTesterDeinit() { RL_TelemetryOnTesterDeinit(); }
 
 void OnDeinit(const int reason)
   {

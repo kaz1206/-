@@ -81,12 +81,12 @@ def write_telemetry(
         "deals.csv": deals_text,
         "stats.json": json.dumps({"source": "OnDeinit", "values": stats or stats_values()}),
         "env.json": json.dumps(env or env_doc(job_id, telemetry_version=version,
-                                              **({"tracking": TRACKING} if version == "2" else {})),
+                                              **({"tracking": TRACKING} if version in ("2", "3") else {})),
                                ensure_ascii=False),
         "done.json": json.dumps(done or {"job_id": job_id, "telemetry_version": version,
                                          "deals_total": len(rows), "trade_deals": trade}),
     }
-    if version == "2":
+    if version in ("2", "3"):  # v3 single tests write exactly the v2 files
         docs["daily.csv"] = daily_text if daily_text is not None else daily_text_from_deals(deals_text)
     for suffix, text in docs.items():
         if suffix.split(".")[0] in skip:

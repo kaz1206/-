@@ -1,7 +1,7 @@
-"""SQLite storage for P1 (ARCHITECTURE §5, P1_PLAN §5).
+"""SQLite storage (ARCHITECTURE §5, P1_PLAN §5, P3_PLAN §3.5).
 
-Research-result tables are append-only, enforced by triggers. Only `job`
-(operational state) may be updated.
+Research-result tables are append-only, enforced by triggers. Only `job` and
+`opt_job` (operational state) may be updated.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 2  # 2: P2 metrics tables (run_metrics, metric_check, period_performance)
+SCHEMA_VERSION = 3  # 2: P2 metrics tables; 3: P3 optimization tables (optimization_round ... trial_ledger)
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -27,6 +27,10 @@ _APPEND_ONLY = (
     "run_metrics",
     "metric_check",
     "period_performance",
+    "optimization_round",
+    "opt_job_artifact",
+    "pass_result",
+    "trial_ledger",
 )
 
 _DDL = """
@@ -159,6 +163,91 @@ CREATE TABLE IF NOT EXISTS period_performance (
     PRIMARY KEY (job_id, metric_def_version, bucket_type, bucket_key)
 );
 
+CREATE TABLE IF NOT EXISTS optimization_round (
+    round_id TEXT PRIMARY KEY,
+    study_id TEXT NOT NULL,
+    study_hash TEXT NOT NULL,
+    strategy_version_id TEXT NOT NULL REFERENCES strategy_version(strategy_version_id),
+    strategy_family TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    timeframe TEXT NOT NULL,
+    from_date TEXT NOT NULL,
+    to_date TEXT NOT NULL,
+    period_semantics TEXT NOT NULL,
+    param_space_json TEXT NOT NULL,
+    fixed_json TEXT NOT NULL,
+    tester_settings_json TEXT NOT NULL,
+    tester_settings_hash TEXT NOT NULL,
+    partition_hash TEXT NOT NULL,
+    algorithm TEXT NOT NULL,
+    expected_passes INTEGER NOT NULL,
+    chunk_count INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS opt_job (
+    job_id TEXT PRIMARY KEY,
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    chunk_index INTEGER NOT NULL,
+    spec_hash TEXT NOT NULL,
+    spec_json TEXT NOT NULL,
+    attempt_no INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    error_class TEXT,
+    error_detail TEXT,
+    terminal_path TEXT NOT NULL,
+    pid INTEGER,
+    exit_code INTEGER,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT,
+    observed_build INTEGER,
+    expected_passes INTEGER NOT NULL,
+    received_passes INTEGER,
+    cache_deleted_json TEXT,
+    tester_log_json TEXT,
+    daily_content_hash TEXT,
+    warnings_json TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS opt_job_round ON opt_job(round_id, chunk_index);
+
+CREATE TABLE IF NOT EXISTS opt_job_artifact (
+    job_id TEXT NOT NULL REFERENCES opt_job(job_id),
+    role TEXT NOT NULL,
+    name TEXT NOT NULL,
+    sha256 TEXT NOT NULL REFERENCES artifact(sha256),
+    PRIMARY KEY (job_id, role, name)
+);
+
+CREATE TABLE IF NOT EXISTS pass_result (
+    job_id TEXT NOT NULL REFERENCES opt_job(job_id),
+    pass_no INTEGER NOT NULL,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
+    metric_def_version TEXT NOT NULL,
+    metrics_json TEXT NOT NULL,
+    unavailable_json TEXT NOT NULL,
+    mt5_stats_json TEXT NOT NULL,
+    xml_profit TEXT NOT NULL,
+    xml_trades INTEGER NOT NULL,
+    daily_rows INTEGER NOT NULL,
+    PRIMARY KEY (job_id, pass_no)
+);
+CREATE INDEX IF NOT EXISTS pass_result_run ON pass_result(run_id);
+
+CREATE TABLE IF NOT EXISTS trial_ledger (
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    chunk_index INTEGER NOT NULL,
+    strategy_family TEXT NOT NULL,
+    study_id TEXT NOT NULL,
+    first_job_id TEXT NOT NULL,
+    n_trials_raw INTEGER NOT NULL,
+    n_trials_effective INTEGER,
+    method TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (round_id, chunk_index)
+);
+
 CREATE TABLE IF NOT EXISTS mt5_reported_metrics (
     job_id TEXT NOT NULL REFERENCES job(job_id),
     name TEXT NOT NULL,
@@ -203,8 +292,8 @@ class Database:
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
-            elif row["version"] == 1:
-                # v1 -> v2 only adds tables (created above by the idempotent DDL)
+            elif row["version"] in (1, 2):
+                # v1 -> v2 -> v3 only add tables (created above by the idempotent DDL)
                 self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported schema version {row['version']} (expected {SCHEMA_VERSION})")
@@ -237,8 +326,10 @@ class Database:
     def all(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
         return self.conn.execute(sql, params).fetchall()
 
-    # --- job (the only mutable table) -----------------------------------
-    def update_job(self, job_id: str, **fields: Any) -> None:
+    # --- job / opt_job (the only mutable tables) ------------------------
+    def update_job(self, job_id: str, *, table: str = "job", **fields: Any) -> None:
+        if table not in ("job", "opt_job"):
+            raise ValueError(f"{table} is not a mutable table")
         if not fields:
             return
         for k, v in list(fields.items()):
@@ -246,6 +337,6 @@ class Database:
                 fields[k] = json.dumps(v, ensure_ascii=False, sort_keys=True)
         sets = ", ".join(f"{k} = ?" for k in fields)
         with self.tx():
-            cur = self.conn.execute(f"UPDATE job SET {sets} WHERE job_id = ?", (*fields.values(), job_id))
+            cur = self.conn.execute(f"UPDATE {table} SET {sets} WHERE job_id = ?", (*fields.values(), job_id))
             if cur.rowcount != 1:
                 raise KeyError(job_id)

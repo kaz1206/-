@@ -180,6 +180,15 @@ def compute(
             na[k] = "not tracked by this telemetry version (v2 needed)"
 
     # --- daily series (telemetry v2) ---
+    daily_metrics(daily, initial_deposit, m, na)
+
+    finalize(m, na)
+    return MetricResult(m, na, _periods(deals, initial_deposit))
+
+
+def daily_metrics(daily: list[dict[str, str]] | None, initial_deposit: float,
+                  m: dict[str, Any], na: dict[str, str]) -> None:
+    """Daily-return statistics from the end-of-day equity series (also used for optimization passes)."""
     if daily:
         closes_eq = [float(r["equity_close"]) for r in daily]
         pnl_d = np.diff(np.array([initial_deposit, *closes_eq]))
@@ -204,13 +213,15 @@ def compute(
         for k in ("days", "daily_mean_return", "daily_std_return", "daily_sharpe", "daily_skewness", "daily_kurtosis"):
             na[k] = "no daily series (telemetry v2 needed)"
 
+
+def finalize(m: dict[str, Any], na: dict[str, str]) -> None:
+    """Non-finite values become null with a reason; every unavailable metric is present as null."""
     for k, v in list(m.items()):
         if isinstance(v, float) and not math.isfinite(v):
             m[k] = None
             na[k] = "not finite"
     for k in na:
         m.setdefault(k, None)
-    return MetricResult(m, na, _periods(deals, initial_deposit))
 
 
 def _periods(deals: list[dict[str, str]], initial_deposit: float) -> list[dict[str, Any]]:

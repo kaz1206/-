@@ -1,4 +1,4 @@
-"""rlab CLI for P1: backtest run / backtest show / jobs list (P1_PLAN §3, §5).
+"""rlab CLI: backtest run/show, jobs list, metrics (P2), optimize run/show and trials show (P3).
 
 Exit codes: 0 ok, 1 configuration/input error, 2 runtime failure, 3 holdout guard rejection.
 Log contents are never printed (they contain the account login and IP address, F8).
@@ -14,13 +14,17 @@ import typer
 from robustlab.single_backtest import run_backtest
 from robustlab.storage.db import Database
 
-app = typer.Typer(no_args_is_help=True, add_completion=False, help="RobustLab (P1: single MT5 backtests)")
+app = typer.Typer(no_args_is_help=True, add_completion=False, help="RobustLab (MT5 backtests and optimizations)")
 backtest = typer.Typer(no_args_is_help=True, help="Run and inspect single backtests")
 jobs_app = typer.Typer(no_args_is_help=True, help="Inspect jobs")
 app.add_typer(backtest, name="backtest")
 app.add_typer(jobs_app, name="jobs")
 metrics_app = typer.Typer(no_args_is_help=True, help="Compute and inspect metrics (P2)")
 app.add_typer(metrics_app, name="metrics")
+optimize_app = typer.Typer(no_args_is_help=True, help="Full-grid MT5 optimizations (P3)")
+app.add_typer(optimize_app, name="optimize")
+trials_app = typer.Typer(no_args_is_help=True, help="Trial ledger (number of tried configurations, P3)")
+app.add_typer(trials_app, name="trials")
 
 WORKSPACE = typer.Option(Path("workspace"), "--workspace", help="Workspace folder (DB, artifacts)")
 
@@ -119,20 +123,27 @@ def jobs_list(workspace: Path = WORKSPACE, status: str | None = typer.Option(Non
               limit: int = typer.Option(20, "--limit"), as_json: bool = typer.Option(False, "--json")) -> None:
     db = _open(workspace)
     try:
-        sql = "SELECT job_id, run_id, attempt_no, status, observed_build, deals_count, error_class FROM job"
-        params: tuple = ()
-        if status:
-            sql += " WHERE status = ?"
-            params = (status,)
-        rows = [dict(r) for r in db.all(sql + " ORDER BY job_id DESC LIMIT ?", (*params, limit))]
+        where, params = (" WHERE status = ?", (status,)) if status else ("", ())
+        rows = [dict(r) | {"kind": "SINGLE"} for r in db.all(
+            "SELECT job_id, run_id, attempt_no, status, observed_build, deals_count, error_class FROM job"
+            + where + " ORDER BY job_id DESC LIMIT ?", (*params, limit))]
+        rows += [dict(r) | {"kind": "OPT"} for r in db.all(
+            "SELECT job_id, round_id, chunk_index, attempt_no, status, observed_build, expected_passes, "
+            "received_passes, error_class FROM opt_job" + where + " ORDER BY job_id DESC LIMIT ?", (*params, limit))]
     finally:
         db.close()
+    rows = sorted(rows, key=lambda r: r["job_id"], reverse=True)[:limit]
     if as_json:
         typer.echo(json.dumps(rows, indent=2))
         return
     for r in rows:
-        typer.echo(f"{r['job_id']} {r['run_id']} #{r['attempt_no']} {r['status']} build={r['observed_build']} "
-                   f"deals={r['deals_count']}" + (f" error={r['error_class']}" if r["error_class"] else ""))
+        err = f" error={r['error_class']}" if r["error_class"] else ""
+        if r["kind"] == "OPT":
+            typer.echo(f"{r['job_id']} {r['round_id']} chunk={r['chunk_index']} #{r['attempt_no']} {r['status']} "
+                       f"build={r['observed_build']} passes={r['received_passes']}/{r['expected_passes']}{err}")
+        else:
+            typer.echo(f"{r['job_id']} {r['run_id']} #{r['attempt_no']} {r['status']} build={r['observed_build']} "
+                       f"deals={r['deals_count']}{err}")
 
 
 @metrics_app.command("compute")
@@ -235,6 +246,139 @@ def metrics_runs(job_id: str, workspace: Path = WORKSPACE) -> None:
             typer.echo(f"  {r}")
     typer.echo("mt5: " + ", ".join(f"{k}={mt5.get(k)}" for k in
                                    ("max_conwins", "max_conprofit_trades", "max_conlosses", "max_conloss_trades")))
+
+
+@optimize_app.command("run")
+def optimize_run(
+    study: Path = typer.Argument(..., exists=True, dir_okay=False, help="Study YAML"),
+    terminal: Path = typer.Option(Path("configs/terminal.yaml"), "--terminal", help="Terminal config YAML"),
+    partition: Path = typer.Option(Path("configs/data_partition.yaml"), "--partition", help="Holdout definition"),
+    workspace: Path = WORKSPACE,
+    rerun: bool = typer.Option(False, "--rerun", help="Run every chunk again even if it already succeeded"),
+    as_json: bool = typer.Option(False, "--json", help="Machine-readable output"),
+) -> None:
+    from robustlab.optimization import run_optimization
+
+    out = run_optimization(study, terminal, partition, workspace, rerun=rerun)
+    if as_json:
+        _emit({"status": out.status, "message": out.message, **out.details}, True)
+        raise typer.Exit(out.exit_code)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    for k in ("round_id", "expected_passes", "chunks"):
+        if k in out.details:
+            typer.echo(f"{k}: {out.details[k]}")
+    for j in out.details.get("jobs", []):
+        typer.echo(f"job {j['job_id']} chunk={j['chunk']} {j['status']} passes={j.get('received')}/{j.get('expected')} "
+                   f"build={j.get('observed_build')} seconds={j.get('terminal_seconds')}")
+        if j.get("error_class") == "AGENT_POLICY_VIOLATION":
+            typer.secho("  SAFETY: passes may have run on remote or cloud agents. Check the MT5 tester agent "
+                        "settings (MQL5 Cloud Network must be off) before running again.", fg="red", err=True)
+        for w in j.get("warnings", []):
+            typer.echo(f"  warning: {w}")
+    raise typer.Exit(out.exit_code)
+
+
+@optimize_app.command("show")
+def optimize_show(round_id: str, workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    """Round, jobs and a distribution summary of all passes (no ranking: selection belongs to later stages)."""
+    import statistics
+
+    db = _open(workspace)
+    try:
+        rnd = db.one("SELECT * FROM optimization_round WHERE round_id = ?", (round_id,))
+        if rnd is None:
+            typer.echo(f"unknown round {round_id}", err=True)
+            raise typer.Exit(1)
+        jobs = [dict(r) for r in db.all("SELECT * FROM opt_job WHERE round_id = ? ORDER BY chunk_index, job_id",
+                                        (round_id,))]
+        latest_ok = {}
+        for j in jobs:
+            if j["status"] == "SUCCEEDED":
+                latest_ok[j["chunk_index"]] = j["job_id"]
+        profits = []
+        for jid in latest_ok.values():
+            for r in db.all("SELECT metrics_json FROM pass_result WHERE job_id = ?", (jid,)):
+                profits.append(json.loads(r["metrics_json"])["net_profit"])
+        trials = db.one("SELECT COALESCE(SUM(n_trials_raw), 0) AS n FROM trial_ledger WHERE strategy_family = ?",
+                        (rnd["strategy_family"],))["n"]
+    finally:
+        db.close()
+    summary = {
+        "passes_stored": len(profits),
+        "chunks_succeeded": f"{len(latest_ok)}/{rnd['chunk_count']}",
+        "net_profit_min": min(profits) if profits else None,
+        "net_profit_median": statistics.median(profits) if profits else None,
+        "net_profit_max": max(profits) if profits else None,
+        "share_profitable": round(sum(p > 0 for p in profits) / len(profits), 4) if profits else None,
+    }
+    data = {
+        "round_id": round_id, "study_id": rnd["study_id"], "strategy_family": rnd["strategy_family"],
+        "symbol_timeframe": f"{rnd['symbol']} {rnd['timeframe']}",
+        "period": f"[{rnd['from_date']}, {rnd['to_date']}) broker server time",
+        "param_space": rnd["param_space_json"], "fixed": rnd["fixed_json"],
+        "expected_passes": rnd["expected_passes"], "summary": summary,
+        "trials_in_family": trials,
+        "jobs": [{k: j[k] for k in ("job_id", "chunk_index", "attempt_no", "status", "expected_passes",
+                                    "received_passes", "observed_build", "error_class", "error_detail")}
+                 | {"warnings": json.loads(j["warnings_json"]), "cache_deleted": json.loads(j["cache_deleted_json"] or "[]"),
+                    "tester_log": json.loads(j["tester_log_json"] or "{}")} for j in jobs],
+    }
+    if as_json:
+        _emit(data, True)
+        return
+    for k in ("round_id", "study_id", "strategy_family", "symbol_timeframe", "period", "param_space", "fixed",
+              "expected_passes", "trials_in_family"):
+        typer.echo(f"{k}: {data[k]}")
+    typer.echo("summary: " + ", ".join(f"{k}={v}" for k, v in summary.items()))
+    for j in data["jobs"]:
+        typer.echo(f"job {j['job_id']} chunk={j['chunk_index']} #{j['attempt_no']} {j['status']} "
+                   f"passes={j['received_passes']}/{j['expected_passes']} build={j['observed_build']} "
+                   f"agents={j['tester_log']}")
+        if j["error_detail"]:
+            typer.echo(f"  error: {j['error_class']}: {j['error_detail']}")
+        for w in j["warnings"]:
+            typer.echo(f"  warning: {w}")
+
+
+@optimize_app.command("pass")
+def optimize_pass(round_id: str, candidate_id: str, workspace: Path = WORKSPACE) -> None:
+    """One pass of a round, by candidate_id (e.g. to compare with a single test of the same parameters)."""
+    db = _open(workspace)
+    try:
+        row = db.one("SELECT p.*, c.params_json FROM pass_result p JOIN opt_job j USING (job_id) "
+                     "JOIN candidate c ON c.candidate_id = p.candidate_id "
+                     "WHERE j.round_id = ? AND p.candidate_id = ? ORDER BY p.job_id DESC LIMIT 1",
+                     (round_id, candidate_id))
+    finally:
+        db.close()
+    if row is None:
+        typer.echo(f"no pass of {round_id} for {candidate_id}", err=True)
+        raise typer.Exit(1)
+    m = json.loads(row["metrics_json"])
+    stats = json.loads(row["mt5_stats_json"])
+    typer.echo(f"job {row['job_id']} pass {row['pass_no']} run {row['run_id']} params {row['params_json']}")
+    typer.echo(f"net_profit={m['net_profit']} trades={m['trades']} deals_mt5={int(stats['deals'])} "
+               f"xml_profit={row['xml_profit']} xml_trades={row['xml_trades']} days={row['daily_rows']}")
+    for k in sorted(m):
+        typer.echo(f"  {k}: {m[k]}")
+
+
+@trials_app.command("show")
+def trials_show(strategy_family: str, workspace: Path = WORKSPACE) -> None:
+    """Every requested trial of a strategy family, including failed and discarded rounds (C44)."""
+    db = _open(workspace)
+    try:
+        rows = db.all("SELECT t.round_id, t.chunk_index, t.study_id, t.n_trials_raw, t.created_at, r.from_date, "
+                      "r.to_date FROM trial_ledger t JOIN optimization_round r USING (round_id) "
+                      "WHERE t.strategy_family = ? ORDER BY t.created_at", (strategy_family,))
+    finally:
+        db.close()
+    for r in rows:
+        typer.echo(f"{r['created_at']} {r['round_id']} chunk={r['chunk_index']} study={r['study_id']} "
+                   f"[{r['from_date']}, {r['to_date']}) trials={r['n_trials_raw']}")
+    typer.echo(f"total trials (raw N): {sum(r['n_trials_raw'] for r in rows)}")
 
 
 if __name__ == "__main__":  # pragma: no cover

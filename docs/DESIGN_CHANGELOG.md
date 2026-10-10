@@ -82,3 +82,13 @@
 | C43 | J4 | §14.8 | チャンク分割の大きさは未定 | 既定 2,000 パス/ジョブ、超えたら最初の最適化軸で分割。値は X10 の結果で見直す | 失敗の影響をチャンク単位に局所化 | P3_PLAN §2.1 |
 | C44 | J5 | §6（trial_ledger） | 数え方の細則は未定 | 戦略ファミリー単位で、**依頼したパス数**（欠けたパス・取引ゼロ・無効な組合せ・捨てた Study も含む）を数える。`n_trials_effective` は P12 まで NULL | 多重検定の分母を過小にしない（保守側） | S-DSR、S-ONC |
 | C45 | J6 | §14.3 | クラウドエージェントの扱いは未記載 | クラウド・リモートエージェントは使用禁止（`UseLocal=1`、`UseRemote=0`、`UseCloud=0`）。実機でローカルだけが使われたことを確認するまで最適化の E2E を行わない | 費用の発生と、実行環境が管理外になることを防ぐ | P3_PLAN §4 |
+
+## v0.7（2026-10-10）: P3 実機確認による変更（K1〜K4）
+
+| # | 元 ID | 対象 | 変更前 | 変更後 | 理由 | 根拠 |
+|---|---|---|---|---|---|---|
+| C46 | K1 | §14.4（最適化の完了判定） | 端末ログの最適化完了行（文言未確認） | テスターログ（`Tester\logs`）の `optimization finished, total passes N`（N = 期待パス数）。開始は端末ログの `automatic testing started` | 最適化では端末ログに成功行が出ない | S-HW-P3 |
+| C47 | K2 | §14.3、C45 | ini で無効化し実機で一度確認 | 加えて毎回のジョブでテスターログの `local N tasks ..., remote 0 tasks ..., cloud 0 tasks ...` を確認し、remote/cloud が 0 でない・行がない場合は SUCCEEDED にしない（`AGENT_POLICY_VIOLATION`） | 設定ミスや既定値の変化に毎回気づくため | S-HW-P3 |
+| C48 | K3 | C42 | `Tester/cache` を退避（移動） | 最適化ジョブの前に対象 EA の `.opt` だけを削除し、消したファイル名を記録。テスターログに `optimization already processed` があれば失敗（`CACHE_HIT`） | 退避先が増え続ける。中身は rlab が保存済み。キャッシュ返却は Frames が届かないのに XML が出る | S-HW-P3 |
+| C49 | K4 | C41 | XML は件数・パラメータ・純損益の照合 | 照合は列名（`Pass`、`Profit`、`Trades`、最適化軸の入力名）で行う。`Result` は使わず `OptimizationCriterion` は指定しない。列名がなければ `XML_UNREADABLE` | 列名は UI 言語によらず英語だった。`Result` は基準で意味が変わる | S-HW-P3 |
+

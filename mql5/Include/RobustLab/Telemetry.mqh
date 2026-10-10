@@ -1,12 +1,17 @@
 //+------------------------------------------------------------------+
-//| RobustLab Telemetry (P1: end-of-test output only)                |
+//| RobustLab Telemetry                                              |
 //|                                                                  |
 //| Usage in an EA:                                                  |
 //|   #include <RobustLab/Telemetry.mqh>                             |
-//|   OnInit   -> RL_TelemetryOnInit();                              |
+//|   OnInit   -> if(RL_IsFrameMode()) return INIT_SUCCEEDED;        |
+//|               RL_TelemetryOnInit();                              |
 //|   OnTick   -> RL_TelemetryOnTick();   (first line)               |
+//|   OnTester -> RL_TelemetryOnTester(); (v3, optimization frames)  |
 //|   OnDeinit -> RL_TelemetryOnDeinit(reason);                      |
+//|   OnTesterInit/OnTesterPass/OnTesterDeinit ->                    |
+//|               RL_TelemetryOnTesterInit/Pass/Deinit();  (v3)      |
 //|                                                                  |
+//| SINGLE TEST (MQL_TESTER, not MQL_OPTIMIZATION):                  |
 //| Writes UTF-8 files to FILE_COMMON (verified on hardware, W7):    |
 //|   RL_<job>_deals.csv  all deals via HistorySelect (W8)           |
 //|   RL_<job>_stats.json TesterStatistics in OnDeinit (W8)          |
@@ -16,11 +21,21 @@
 //|   RL_<job>_done.json  completion marker, written LAST and only   |
 //|                       if every other file was written            |
 //| Nothing is written outside the Strategy Tester or without a job. |
+//|                                                                  |
+//| OPTIMIZATION (v3, P3_PLAN 3.3, verified pattern [S-HW-P3]):      |
+//|  agents: OnTester sends one frame per pass (stats, tracking,     |
+//|          daily rows) with FrameAdd; no files are written.        |
+//|  frame-mode instance (terminal side, MQL_FRAME_MODE, no trading):|
+//|   RL_<job>_fm_init.json  written first                           |
+//|   RL_<job>_passes.jsonl  one JSON line per received frame        |
+//|   RL_<job>_pdaily.csv    daily rows of every pass                |
+//|   RL_<job>_fm_done.json  counts, written LAST                    |
 //+------------------------------------------------------------------+
 #ifndef ROBUSTLAB_TELEMETRY_MQH
 #define ROBUSTLAB_TELEMETRY_MQH
 
-#define RL_TELEMETRY_VERSION "2"
+#define RL_TELEMETRY_VERSION "3"
+#define RL_FRAME_FORMAT 3
 
 input string RL_JobId = "";   // set by RobustLab; harness input, not a strategy parameter
 
@@ -51,6 +66,21 @@ double   rl_day_bal_close  = 0.0;
 int      rl_day_pos_max    = 0;
 long     rl_day_ticks      = 0;
 string   rl_daily_csv      = "date,balance_close,equity_close,equity_min,equity_max,positions_max,ticks\n";
+//--- v3: daily rows kept as numbers for the optimization frame
+double   rl_daily_rows[];   // 7 values per day: date, balance, equity, min, max, positions, ticks
+int      rl_daily_n        = 0;
+bool     rl_frame_sent     = false;
+//--- v3: frame-mode (terminal side) counters
+int      rl_fm_frames      = 0;
+int      rl_fm_events      = 0;
+int      rl_fm_dups        = 0;
+int      rl_fm_bad         = 0;
+int      rl_fm_fail        = 0;
+ulong    rl_fm_passes[];
+string   rl_track_names[]  = {"equity_peak", "equity_min", "equity_max_dd", "equity_max_dd_pct",
+                              "max_floating_loss", "max_positions", "max_lots", "min_margin_level",
+                              "stop_out_deals", "ticks", "first_tick", "last_tick", "bars"};
+#define RL_DAILY_COLS 7
 
 int    rl_stat_ids[]   = {STAT_INITIAL_DEPOSIT, STAT_PROFIT, STAT_GROSS_PROFIT, STAT_GROSS_LOSS,
                           STAT_TRADES, STAT_DEALS, STAT_BALANCE_DD, STAT_EQUITY_DD,
@@ -66,6 +96,9 @@ string rl_stat_names[] = {"initial_deposit", "profit", "gross_profit", "gross_lo
                           "max_conloss_trades"};
 
 bool RL_IsTester() { return (bool)MQLInfoInteger(MQL_TESTER); }
+bool RL_IsOptimization() { return (bool)MQLInfoInteger(MQL_OPTIMIZATION); }
+// The collector instance MT5 runs on a terminal chart during optimization. It must never trade.
+bool RL_IsFrameMode() { return (bool)MQLInfoInteger(MQL_FRAME_MODE); }
 
 string RL_JStr(string s)
   {
@@ -106,6 +139,18 @@ void RL_FlushDay()
   {
    if(rl_day == 0)
       return;
+   int base = rl_daily_n * RL_DAILY_COLS;
+   ArrayResize(rl_daily_rows, base + RL_DAILY_COLS, 4096);
+   rl_daily_rows[base]     = (double)(long)rl_day;
+   rl_daily_rows[base + 1] = rl_day_bal_close;
+   rl_daily_rows[base + 2] = rl_day_eq_close;
+   rl_daily_rows[base + 3] = rl_day_eq_min;
+   rl_daily_rows[base + 4] = rl_day_eq_max;
+   rl_daily_rows[base + 5] = rl_day_pos_max;
+   rl_daily_rows[base + 6] = (double)rl_day_ticks;
+   rl_daily_n++;
+   if(RL_IsOptimization())
+      return;   // the CSV text is only needed for a single test
    rl_daily_csv += TimeToString(rl_day, TIME_DATE) + ","
                    + DoubleToString(rl_day_bal_close, 2) + ","
                    + DoubleToString(rl_day_eq_close, 2) + ","
@@ -195,8 +240,8 @@ void RL_TelemetryOnTick()
 
 void RL_TelemetryOnDeinit(const int reason)
   {
-   if(!RL_IsTester())
-      return;
+   if(!RL_IsTester() || RL_IsOptimization())
+      return;   // optimization passes report through frames (RL_TelemetryOnTester)
    if(RL_JobId == "")
      {
       Print("RL telemetry: RL_JobId is empty, nothing written");
@@ -333,6 +378,234 @@ void RL_TelemetryOnDeinit(const int reason)
                  + "}\n";
    if(RL_Write(prefix + "done.json", done))
       PrintFormat("RL telemetry: written job=%s deals=%d", RL_JobId, n_deals);
+  }
+
+//==================================================================
+// v3: optimization frames
+//==================================================================
+// Closes the current day with the final account state (like OnDeinit does for a single test).
+void RL_CloseLastDay()
+  {
+   if(rl_day == 0)
+      return;
+   rl_day_eq_close  = AccountInfoDouble(ACCOUNT_EQUITY);
+   rl_day_bal_close = AccountInfoDouble(ACCOUNT_BALANCE);
+   if(rl_day_eq_close < rl_day_eq_min)
+      rl_day_eq_min = rl_day_eq_close;
+   if(rl_day_eq_close > rl_day_eq_max)
+      rl_day_eq_max = rl_day_eq_close;
+   RL_FlushDay();
+   rl_day = 0;
+  }
+
+// Agent side: one frame per optimization pass. Call from OnTester.
+void RL_TelemetryOnTester()
+  {
+   if(!RL_IsTester() || !RL_IsOptimization() || rl_frame_sent)
+      return;
+   rl_frame_sent = true;
+   RL_CloseLastDay();
+
+   int n_so = 0;
+   if(HistorySelect(0, D'2100.01.01 00:00'))
+      for(int i = HistoryDealsTotal() - 1; i >= 0; i--)
+        {
+         ulong d = HistoryDealGetTicket(i);
+         if(d != 0 && HistoryDealGetInteger(d, DEAL_REASON) == DEAL_REASON_SO)
+            n_so++;
+        }
+   int nst = ArraySize(rl_stat_ids);
+   int ntr = ArraySize(rl_track_names);
+   double data[];
+   ArrayResize(data, 5 + nst + ntr + rl_daily_n * RL_DAILY_COLS);
+   data[0] = RL_FRAME_FORMAT;
+   data[1] = nst;
+   data[2] = ntr;
+   data[3] = rl_daily_n;
+   data[4] = RL_DAILY_COLS;
+   for(int i = 0; i < nst; i++)
+      data[5 + i] = TesterStatistics((ENUM_STATISTICS)rl_stat_ids[i]);
+   int t = 5 + nst;
+   data[t]      = rl_eq_peak;
+   data[t + 1]  = rl_eq_min;
+   data[t + 2]  = rl_eq_max_dd;
+   data[t + 3]  = rl_eq_max_dd_pct;
+   data[t + 4]  = rl_max_floating;
+   data[t + 5]  = rl_max_positions;
+   data[t + 6]  = rl_max_lots;
+   data[t + 7]  = rl_min_margin;   // -1: never had a position
+   data[t + 8]  = n_so;
+   data[t + 9]  = (double)rl_ticks;
+   data[t + 10] = (double)(long)rl_first_tick;
+   data[t + 11] = (double)(long)rl_last_tick;
+   data[t + 12] = rl_bars;
+   int d0 = t + ntr;
+   for(int k = 0; k < rl_daily_n * RL_DAILY_COLS; k++)
+      data[d0 + k] = rl_daily_rows[k];
+   ResetLastError();
+   if(!FrameAdd("RL", RL_FRAME_FORMAT, TesterStatistics(STAT_PROFIT), data))
+      PrintFormat("RL telemetry: FrameAdd failed err=%d", GetLastError());
+  }
+
+// Frame-mode side ---------------------------------------------------
+bool RL_Append(string name, string text)
+  {
+   ResetLastError();
+   int h = FileOpen(name, FILE_READ | FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON, '\t', CP_UTF8);
+   if(h == INVALID_HANDLE)
+     {
+      PrintFormat("RL telemetry: append failed name=%s err=%d", name, GetLastError());
+      return false;
+     }
+   FileSeek(h, 0, SEEK_END);
+   uint written = FileWriteString(h, text);
+   FileClose(h);
+   return (written > 0 || StringLen(text) == 0);
+  }
+
+void RL_TelemetryOnTesterInit()
+  {
+   if(RL_JobId == "")
+     {
+      Print("RL telemetry: RL_JobId is empty, frames are not collected");
+      return;
+     }
+   string prefix = "RL_" + RL_JobId + "_";
+   bool ok = RL_Write(prefix + "passes.jsonl", "")
+             && RL_Write(prefix + "pdaily.csv", "pass,date,balance_close,equity_close,equity_min,equity_max,positions_max,ticks\n")
+             && RL_Write(prefix + "fm_init.json", "{"
+                         + RL_KV("job_id", RL_JStr(RL_JobId)) + ","
+                         + RL_KV("telemetry_version", RL_JStr(RL_TELEMETRY_VERSION)) + ","
+                         + RL_KV("terminal_build", IntegerToString(TerminalInfoInteger(TERMINAL_BUILD))) + ","
+                         + RL_KV("mql_frame_mode", RL_JBool(RL_IsFrameMode())) + ","
+                         + RL_KV("mql_tester", RL_JBool(RL_IsTester()))
+                         + "}\n");
+   if(!ok)
+      rl_fm_fail++;
+  }
+
+void RL_DrainFrames()
+  {
+   if(RL_JobId == "")
+      return;
+   string prefix = "RL_" + RL_JobId + "_";
+   ulong  pass;
+   string name;
+   long   id;
+   double value;
+   double data[];
+   while(FrameNext(pass, name, id, value, data))
+     {
+      rl_fm_frames++;
+      int np = ArraySize(rl_fm_passes);
+      for(int i = 0; i < np; i++)
+         if(rl_fm_passes[i] == pass)
+           {
+            rl_fm_dups++;
+            break;
+           }
+      ArrayResize(rl_fm_passes, np + 1, 1024);
+      rl_fm_passes[np] = pass;
+
+      int n   = ArraySize(data);
+      int nst = ArraySize(rl_stat_ids);
+      int ntr = ArraySize(rl_track_names);
+      if(n < 5 || (int)data[0] != RL_FRAME_FORMAT || (int)data[1] != nst || (int)data[2] != ntr
+         || (int)data[4] != RL_DAILY_COLS || n != 5 + nst + ntr + (int)data[3] * RL_DAILY_COLS)
+        {
+         rl_fm_bad++;
+         PrintFormat("RL telemetry: malformed frame pass=%I64u size=%d", pass, n);
+         continue;
+        }
+      string params[];
+      uint   pc = 0;
+      string inputs = "[";
+      if(FrameInputs(pass, params, pc))
+         for(uint i = 0; i < pc; i++)
+            inputs += (i == 0 ? "" : ",") + RL_JStr(params[i]);
+      inputs += "]";
+      string st = "{";
+      for(int i = 0; i < nst; i++)
+         st += (i == 0 ? "" : ",") + RL_KV(rl_stat_names[i], RL_JNum(data[5 + i], 2));
+      st += "}";
+      int t = 5 + nst;
+      string tr = "{"
+                  + RL_KV("equity_peak", RL_JNum(data[t], 2)) + ","
+                  + RL_KV("equity_min", RL_JNum(data[t + 1], 2)) + ","
+                  + RL_KV("equity_max_dd", RL_JNum(data[t + 2], 2)) + ","
+                  + RL_KV("equity_max_dd_pct", RL_JNum(data[t + 3], 4)) + ","
+                  + RL_KV("max_floating_loss", RL_JNum(data[t + 4], 2)) + ","
+                  + RL_KV("max_positions", IntegerToString((int)data[t + 5])) + ","
+                  + RL_KV("max_lots", RL_JNum(data[t + 6], 2)) + ","
+                  + RL_KV("min_margin_level", (data[t + 7] < 0 ? "null" : RL_JNum(data[t + 7], 2))) + ","
+                  + RL_KV("stop_out_deals", IntegerToString((int)data[t + 8]))
+                  + "}";
+      int nd = (int)data[3];
+      string line = "{"
+                    + RL_KV("pass", StringFormat("%I64u", pass)) + ","
+                    + RL_KV("format", IntegerToString((int)data[0])) + ","
+                    + RL_KV("inputs", inputs) + ","
+                    + RL_KV("stats", st) + ","
+                    + RL_KV("tracking", tr) + ","
+                    + RL_KV("ticks", StringFormat("%I64d", (long)data[t + 9])) + ","
+                    + RL_KV("first_tick", RL_TS((datetime)(long)data[t + 10])) + ","
+                    + RL_KV("last_tick", RL_TS((datetime)(long)data[t + 11])) + ","
+                    + RL_KV("bars", IntegerToString((int)data[t + 12])) + ","
+                    + RL_KV("days", IntegerToString(nd))
+                    + "}\n";
+      string daily = "";
+      int d0 = t + ntr;
+      for(int k = 0; k < nd; k++)
+        {
+         int b = d0 + k * RL_DAILY_COLS;
+         daily += StringFormat("%I64u,", pass)
+                  + TimeToString((datetime)(long)data[b], TIME_DATE) + ","
+                  + DoubleToString(data[b + 1], 2) + ","
+                  + DoubleToString(data[b + 2], 2) + ","
+                  + DoubleToString(data[b + 3], 2) + ","
+                  + DoubleToString(data[b + 4], 2) + ","
+                  + IntegerToString((int)data[b + 5]) + ","
+                  + StringFormat("%I64d", (long)data[b + 6]) + "\n";
+        }
+      // daily rows first: a pass line exists only if its daily rows were written
+      if(!(RL_Append(prefix + "pdaily.csv", daily) && RL_Append(prefix + "passes.jsonl", line)))
+         rl_fm_fail++;
+     }
+  }
+
+void RL_TelemetryOnTesterPass()
+  {
+   rl_fm_events++;
+   RL_DrainFrames();
+  }
+
+void RL_TelemetryOnTesterDeinit()
+  {
+   if(RL_JobId == "")
+      return;
+   RL_DrainFrames();   // late frames ([S-MQL5BOOK-FRAME])
+   int    rescan = 0;
+   ulong  pass;
+   string name;
+   long   id;
+   double value;
+   double data[];
+   if(FrameFirst())
+      while(FrameNext(pass, name, id, value, data))
+         rescan++;
+   string done = "{"
+                 + RL_KV("job_id", RL_JStr(RL_JobId)) + ","
+                 + RL_KV("telemetry_version", RL_JStr(RL_TELEMETRY_VERSION)) + ","
+                 + RL_KV("mql_frame_mode", RL_JBool(RL_IsFrameMode())) + ","
+                 + RL_KV("frames_received", IntegerToString(rl_fm_frames - rl_fm_bad)) + ","
+                 + RL_KV("frames_on_rescan", IntegerToString(rescan)) + ","
+                 + RL_KV("pass_events", IntegerToString(rl_fm_events)) + ","
+                 + RL_KV("duplicate_passes", IntegerToString(rl_fm_dups)) + ","
+                 + RL_KV("bad_frames", IntegerToString(rl_fm_bad)) + ","
+                 + RL_KV("write_failures", IntegerToString(rl_fm_fail))
+                 + "}\n";
+   if(RL_Write("RL_" + RL_JobId + "_fm_done.json", done))
+      PrintFormat("RL telemetry: frames collected job=%s frames=%d", RL_JobId, rl_fm_frames);
   }
 
 #endif // ROBUSTLAB_TELEMETRY_MQH

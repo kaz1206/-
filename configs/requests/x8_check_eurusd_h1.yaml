@@ -1,0 +1,10 @@
+# P3 E2E step 6: the same parameters and period as one pass of configs/studies/rl_smoketest_grid.yaml,
+# run as a single test (X8 with real ticks). Same candidate_id as that pass.
+strategy_file: ../strategies/rl_smoketest.yaml
+symbol: EURUSD
+timeframe: H1
+from_date: 2022-01-03
+to_date: 2024-01-01
+params: {InpFastPeriod: 12, InpSlowPeriod: 50, InpLots: 0.01}
+tester: {model: REAL_TICKS, execution_delay_ms: 0, deposit: 10000, currency: USD, leverage: 100}
+coverage_tolerance_days: 7

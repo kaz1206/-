@@ -35,7 +35,9 @@ TRACKING_KEYS = ("equity_peak", "equity_min", "equity_max_dd", "equity_max_dd_pc
                  "max_positions", "max_lots", "min_margin_level", "stop_out_deals")
 
 FILE_ROLES = ("deals", "stats", "env", "done", "daily")
-REQUIRED_ROLES = {"1": ("deals", "stats", "env", "done"), "2": ("deals", "stats", "env", "done", "daily")}
+# v3 adds optimization frames (P3); a single test writes exactly the v2 files
+REQUIRED_ROLES = {"1": ("deals", "stats", "env", "done"), "2": ("deals", "stats", "env", "done", "daily"),
+                  "3": ("deals", "stats", "env", "done", "daily")}
 _SUFFIX = {"deals": "deals.csv", "stats": "stats.json", "env": "env.json", "done": "done.json",
            "daily": "daily.csv"}
 
