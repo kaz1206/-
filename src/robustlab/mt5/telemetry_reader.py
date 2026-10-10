@@ -30,8 +30,14 @@ TRADE_DEAL_TYPES = {0, 1}  # DEAL_TYPE_BUY, DEAL_TYPE_SELL
 PROFIT_TOLERANCE = Decimal("0.01")
 DEALS_SCHEMA_VERSION = "deals_v1"
 
-FILE_ROLES = ("deals", "stats", "env", "done")
-_SUFFIX = {"deals": "deals.csv", "stats": "stats.json", "env": "env.json", "done": "done.json"}
+DAILY_COLUMNS = ["date", "balance_close", "equity_close", "equity_min", "equity_max", "positions_max", "ticks"]
+TRACKING_KEYS = ("equity_peak", "equity_min", "equity_max_dd", "equity_max_dd_pct", "max_floating_loss",
+                 "max_positions", "max_lots", "min_margin_level", "stop_out_deals")
+
+FILE_ROLES = ("deals", "stats", "env", "done", "daily")
+REQUIRED_ROLES = {"1": ("deals", "stats", "env", "done"), "2": ("deals", "stats", "env", "done", "daily")}
+_SUFFIX = {"deals": "deals.csv", "stats": "stats.json", "env": "env.json", "done": "done.json",
+           "daily": "daily.csv"}
 
 
 def telemetry_filename(job_id: str, role: str) -> str:
@@ -52,6 +58,7 @@ class TelemetryResult:
     stats: dict[str, Any] | None = None
     env: dict[str, Any] | None = None
     deals: list[dict[str, str]] | None = None
+    daily: list[dict[str, str]] | None = None
     canonical_deals: bytes | None = None
     deals_content_hash: str | None = None
     net_profit_sum: Decimal | None = None
@@ -80,20 +87,23 @@ def _read_json(path: Path) -> dict[str, Any]:
     return data
 
 
-def _read_deals(path: Path) -> list[dict[str, str]]:
-    text = path.read_text(encoding="utf-8-sig")
-    reader = csv.reader(io.StringIO(text, newline=""))
+def parse_csv_text(text: str, columns: list[str], what: str) -> list[dict[str, str]]:
+    reader = csv.reader(io.StringIO(text.lstrip("\ufeff"), newline=""))
     header = next(reader, None)
-    if header != DEALS_COLUMNS:
-        raise ValueError(f"deals header mismatch: {header}")
+    if header != columns:
+        raise ValueError(f"{what} header mismatch: {header}")
     rows = []
     for i, rec in enumerate(reader, start=2):
         if not rec:
             continue
-        if len(rec) != len(DEALS_COLUMNS):
-            raise ValueError(f"deals line {i}: expected {len(DEALS_COLUMNS)} fields, got {len(rec)}")
-        rows.append(dict(zip(DEALS_COLUMNS, rec, strict=True)))
+        if len(rec) != len(columns):
+            raise ValueError(f"{what} line {i}: expected {len(columns)} fields, got {len(rec)}")
+        rows.append(dict(zip(columns, rec, strict=True)))
     return rows
+
+
+def _read_deals(path: Path) -> list[dict[str, str]]:
+    return parse_csv_text(path.read_text(encoding="utf-8-sig"), DEALS_COLUMNS, "deals")
 
 
 def canonical_deals_bytes(rows: list[dict[str, str]]) -> bytes:
@@ -156,7 +166,11 @@ def validate(common_dir: Path, exp: Expectation) -> TelemetryResult:
         res.status = JobStatus.TELEMETRY_MISSING
         res.problems.append("completion marker not found")
         return res
-    missing = [r for r in FILE_ROLES if r not in present]
+    required = REQUIRED_ROLES.get(exp.telemetry_version)
+    if required is None:
+        res.problems.append(f"unsupported telemetry_version {exp.telemetry_version!r}")
+        return res
+    missing = [r for r in required if r not in present]
     if missing:
         res.problems.append(f"telemetry files missing: {missing}")
         return res
@@ -166,6 +180,8 @@ def validate(common_dir: Path, exp: Expectation) -> TelemetryResult:
         res.stats = _read_json(present["stats"])
         res.env = _read_json(present["env"])
         res.deals = _read_deals(present["deals"])
+        if "daily" in required:
+            res.daily = parse_csv_text(present["daily"].read_text(encoding="utf-8-sig"), DAILY_COLUMNS, "daily")
     except (ValueError, UnicodeDecodeError) as e:
         res.problems.append(f"PARSE: {e}")
         return res
@@ -229,7 +245,10 @@ def validate(common_dir: Path, exp: Expectation) -> TelemetryResult:
                 p.append(f"DATA_COVERAGE: first tick {first} is more than {exp.coverage_tolerance_days} days after {start}")
             if last < end - tol:
                 p.append(f"DATA_COVERAGE: last tick {last} is more than {exp.coverage_tolerance_days} days before {end}")
-    except (KeyError, TypeError, ValueError) as e:
+        # 6. telemetry v2: EA tracking values and the daily series (P2_PLAN §4)
+        if res.daily is not None:
+            _check_v2(res, exp, p)
+    except (KeyError, TypeError, ValueError, InvalidOperation) as e:
         p.append(f"PARSE: {e}")
 
     if not p:
@@ -237,3 +256,30 @@ def validate(common_dir: Path, exp: Expectation) -> TelemetryResult:
         res.deals_content_hash = hashlib.sha256(res.canonical_deals).hexdigest()
         res.status = JobStatus.SUCCEEDED
     return res
+
+
+def _check_v2(res: TelemetryResult, exp: Expectation, p: list[str]) -> None:
+    tracking = res.env.get("tracking")
+    if not isinstance(tracking, dict) or any(k not in tracking for k in TRACKING_KEYS):
+        p.append(f"env.tracking is missing keys: {[k for k in TRACKING_KEYS if k not in (tracking or {})]}")
+    elif float(tracking["equity_max_dd"]) < 0:
+        p.append("equity_max_dd is negative")
+    daily = res.daily
+    if not daily:
+        p.append("DAILY: the daily series is empty")
+        return
+    dates = [dt.datetime.strptime(r["date"], "%Y.%m.%d").date() for r in daily]
+    if any(b <= a for a, b in zip(dates, dates[1:], strict=False)):
+        p.append("DAILY: dates are not strictly increasing")
+    if dates[0] < exp.from_date or dates[-1] >= exp.to_date:
+        p.append(f"DAILY: dates {dates[0]}..{dates[-1]} fall outside [{exp.from_date}, {exp.to_date})")
+    eps = Decimal("0.005")
+    for r in daily:
+        lo, close, hi = (_dec(r[c], c) for c in ("equity_min", "equity_close", "equity_max"))
+        if not (lo - eps <= close <= hi + eps):
+            p.append(f"DAILY: {r['date']} equity_close {close} outside [{lo}, {hi}]")
+            break
+    expected_final = _dec(res.env.get("initial_balance"), "initial_balance") + (res.net_profit_sum or Decimal(0))
+    final = _dec(daily[-1]["equity_close"], "equity_close")
+    if abs(final - expected_final) > PROFIT_TOLERANCE:
+        p.append(f"DAILY: final equity {final} != initial balance + net profit {expected_final}")

@@ -195,3 +195,44 @@ def test_hanging_relaunched_terminal_is_killed_before_returning(env):
 def jobs_warnings(env):
     import json
     return json.loads(jobs(env)[0]["warnings_json"])
+
+
+# --- P2: telemetry v2 and metrics --------------------------------------------------------------
+def _v2_request(env):
+    s = (env.req.parent.parent / "strategies" / "smoke.yaml")
+    s2 = s.with_name("smoke2.yaml")
+    s2.write_text(s.read_text().replace('telemetry_version: "1"', 'telemetry_version: "2"'))
+    r2 = env.req.with_name("r2.yaml")
+    r2.write_text(env.req.read_text().replace("smoke.yaml", "smoke2.yaml"))
+    return r2
+
+
+def _db(env):
+    return Database(env.ws / "robustlab.sqlite")
+
+
+def test_v2_job_gets_metrics_that_match_mt5(env, monkeypatch):
+    monkeypatch.setenv("FAKE_TELEMETRY_VERSION", "2")
+    out = env.run(req=_v2_request(env))
+    assert out.status == "SUCCEEDED", out
+    assert "MISMATCH" not in (out.details["metric_checks"] or "") and "MATCH" in out.details["metric_checks"]
+    db = _db(env)
+    try:
+        checks = {r["name"]: r["status"] for r in db.all("SELECT name, status FROM metric_check")}
+        assert checks["equity_max_dd"] == "MATCH" and checks["recovery_factor"] == "MATCH"
+        assert checks["daily_sharpe"] == "NOT_COMPARABLE"
+        assert db.one("SELECT COUNT(*) AS n FROM period_performance")["n"] >= 2
+        assert db.one("SELECT 1 FROM job_artifact WHERE role = 'telemetry_daily'") is not None
+    finally:
+        db.close()
+
+
+def test_v1_job_gets_trade_metrics_and_reasoned_nulls(env):
+    out = env.run()
+    assert out.status == "SUCCEEDED"
+    db = _db(env)
+    try:
+        checks = {r["name"]: r["status"] for r in db.all("SELECT name, status FROM metric_check")}
+        assert checks["net_profit"] == "MATCH" and checks["equity_max_dd"] == "OURS_MISSING"
+    finally:
+        db.close()

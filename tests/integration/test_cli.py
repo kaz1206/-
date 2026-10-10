@@ -38,3 +38,16 @@ def test_cli_guard_exit_code(env):
     res = runner.invoke(app, ["backtest", "run", str(bad), "--terminal", str(env.terminal_cfg),
                               "--partition", str(env.partition), "--workspace", str(env.ws)])
     assert res.exit_code == 3 and "GUARD_REJECTED" in res.output
+
+
+def test_cli_metrics_compute_and_show(env, monkeypatch):
+    monkeypatch.setenv("FAKE_MODE", "ok")
+    out = json.loads(_run(env, "--json").output)
+    again = runner.invoke(app, ["metrics", "compute", "--all", "--workspace", str(env.ws)])
+    assert again.exit_code == 0 and "already computed" in again.output
+    show = runner.invoke(app, ["metrics", "show", out["run_id"], "--workspace", str(env.ws)])
+    assert show.exit_code == 0
+    assert "MATCH" in show.output and "net_profit" in show.output and "-- by year --" in show.output
+    assert "not tracked by this telemetry version" in show.output
+    bad = runner.invoke(app, ["metrics", "compute", "jb_nope", "--workspace", str(env.ws)])
+    assert bad.exit_code == 2

@@ -21,6 +21,7 @@ from robustlab.config.loader import (
 from robustlab.core import ids
 from robustlab.core.models import JobStatus, TerminalConfig
 from robustlab.core.params import ParamError, normalize_params
+from robustlab.metrics import store as metrics_store
 from robustlab.mt5 import ini_builder, telemetry_reader, terminal
 from robustlab.oos import holdout_guard
 from robustlab.storage.artifacts import ArtifactStore
@@ -312,6 +313,19 @@ def _execute(ws: Workspace, cfg: TerminalConfig, lr: LoadedRequest, normalized: 
                 db.insert("mt5_reported_metrics", {"job_id": job_id, "name": k, "value": str(v)})
         db.update_job(job_id, **fields)
 
+    # P2: metrics from the archived artifacts. A failure here never revokes the job's success.
+    metric_summary = None
+    if status is JobStatus.SUCCEEDED:
+        try:
+            sm = metrics_store.compute_and_store(db, store, job_id)
+            counts: dict[str, int] = {}
+            for c in sm.checks:
+                counts[c["status"]] = counts.get(c["status"], 0) + 1
+            metric_summary = ", ".join(f"{k} {v}" for k, v in sorted(counts.items()))
+        except Exception as e:  # noqa: BLE001 - recorded as a warning on the job
+            warnings.append(f"METRICS_FAILED: {type(e).__name__}: {e}")
+            db.update_job(job_id, warnings_json=warnings)
+
     # cleanup of the files this job created outside the workspace (all archived above)
     for path in [set_path, *[p for p in tel_files.values() if p.is_file()], *report_files]:
         path.unlink(missing_ok=True)
@@ -322,5 +336,5 @@ def _execute(ws: Workspace, cfg: TerminalConfig, lr: LoadedRequest, normalized: 
         "deals": fields.get("deals_count"), "net_profit_mt5": fields.get("net_profit_mt5"),
         "net_profit_sum": fields.get("net_profit_sum"), "observed_build": fields.get("observed_build"),
         "deals_content_hash": fields.get("deals_content_hash"), "warnings": warnings,
-        "terminal_seconds": outcome.seconds,
+        "terminal_seconds": outcome.seconds, "metric_checks": metric_summary,
     })

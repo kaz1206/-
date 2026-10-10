@@ -19,6 +19,8 @@ backtest = typer.Typer(no_args_is_help=True, help="Run and inspect single backte
 jobs_app = typer.Typer(no_args_is_help=True, help="Inspect jobs")
 app.add_typer(backtest, name="backtest")
 app.add_typer(jobs_app, name="jobs")
+metrics_app = typer.Typer(no_args_is_help=True, help="Compute and inspect metrics (P2)")
+app.add_typer(metrics_app, name="metrics")
 
 WORKSPACE = typer.Option(Path("workspace"), "--workspace", help="Workspace folder (DB, artifacts)")
 
@@ -131,6 +133,80 @@ def jobs_list(workspace: Path = WORKSPACE, status: str | None = typer.Option(Non
     for r in rows:
         typer.echo(f"{r['job_id']} {r['run_id']} #{r['attempt_no']} {r['status']} build={r['observed_build']} "
                    f"deals={r['deals_count']}" + (f" error={r['error_class']}" if r["error_class"] else ""))
+
+
+@metrics_app.command("compute")
+def metrics_compute(job_id: str | None = typer.Argument(None, help="Job to compute (omit with --all)"),
+                    all_jobs: bool = typer.Option(False, "--all", help="Every SUCCEEDED job without metrics"),
+                    workspace: Path = WORKSPACE) -> None:
+    from robustlab.metrics import store as metrics_store
+    from robustlab.storage.artifacts import ArtifactStore
+
+    if bool(job_id) == all_jobs:
+        typer.echo("give a job_id or --all", err=True)
+        raise typer.Exit(1)
+    db = _open(workspace)
+    try:
+        store = ArtifactStore(workspace.resolve() / "artifacts", db)
+        ids = [job_id] if job_id else [r["job_id"] for r in db.all(
+            "SELECT job_id FROM job WHERE status = 'SUCCEEDED' ORDER BY job_id")]
+        failed = False
+        for jid in ids:
+            try:
+                sm = metrics_store.compute_and_store(db, store, jid)
+            except metrics_store.MetricsError as e:
+                typer.echo(f"{jid}: {e}", err=True)
+                failed = True
+                continue
+            mismatches = [c["name"] for c in sm.checks if c["status"] == "MISMATCH"]
+            state = "computed" if sm.created else "already computed"
+            typer.echo(f"{jid}: {state} ({sm.version})" + (f" MISMATCH: {mismatches}" if mismatches else ""))
+    finally:
+        db.close()
+    raise typer.Exit(2 if failed else 0)
+
+
+@metrics_app.command("show")
+def metrics_show(run_id: str, job: str | None = typer.Option(None, "--job", help="Default: latest SUCCEEDED job"),
+                 workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.metrics import store as metrics_store
+
+    db = _open(workspace)
+    try:
+        if job is None:
+            row = db.one("SELECT job_id FROM job WHERE run_id = ? AND status = 'SUCCEEDED' ORDER BY job_id DESC LIMIT 1",
+                         (run_id,))
+            if row is None:
+                typer.echo(f"no SUCCEEDED job for {run_id}", err=True)
+                raise typer.Exit(1)
+            job = row["job_id"]
+        sm = metrics_store.load(db, job)
+        if sm is None:
+            typer.echo(f"no metrics for {job}; run: rlab metrics compute {job}", err=True)
+            raise typer.Exit(1)
+        periods = [dict(r) for r in db.all(
+            "SELECT bucket_type, bucket_key, net_profit, trades, balance_max_dd FROM period_performance "
+            "WHERE job_id = ? AND metric_def_version = ? ORDER BY bucket_type DESC, bucket_key", (job, sm.version))]
+    finally:
+        db.close()
+    if as_json:
+        typer.echo(json.dumps({"job_id": job, "version": sm.version, "metrics": sm.metrics,
+                               "unavailable": sm.unavailable, "checks": sm.checks, "periods": periods},
+                              indent=2, ensure_ascii=False))
+        return
+    typer.echo(f"job: {job}  metrics: {sm.version}")
+    typer.echo("-- comparison with MT5 --")
+    for c in sm.checks:
+        typer.echo(f"  {c['status']:<14} {c['name']:<26} ours={c['ours']} mt5={c['mt5']}")
+    typer.echo("-- metrics --")
+    for k in sorted(sm.metrics):
+        v = sm.metrics[k]
+        reason = f"  ({sm.unavailable[k]})" if v is None and k in sm.unavailable else ""
+        typer.echo(f"  {k}: {v}{reason}")
+    typer.echo("-- by year --")
+    for p in periods:
+        if p["bucket_type"] == "YEAR":
+            typer.echo(f"  {p['bucket_key']}: net={p['net_profit']} trades={p['trades']} max_dd={p['balance_max_dd']}")
 
 
 if __name__ == "__main__":  # pragma: no cover

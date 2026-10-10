@@ -30,7 +30,12 @@ sys.path.insert(0, str(ROOT))
 
 import subprocess  # noqa: E402
 
-from tests.telemetry_factory import env_doc, stats_values, write_telemetry  # noqa: E402
+from tests.telemetry_factory import (  # noqa: E402
+    TRACKING,
+    env_doc,
+    stats_values,
+    write_telemetry,
+)
 
 
 def log(data_dir: Path, message: str, source: str = "Tester") -> None:
@@ -85,7 +90,10 @@ def main() -> int:
     agent_logs.mkdir(parents=True, exist_ok=True)
     (agent_logs / "agent.log").write_bytes(codecs.BOM_UTF16_LE + "agent ok\r\n".encode("utf-16-le"))
     stats = stats_values(profit=9.71) if mode == "bad_profit" else None
-    write_telemetry(common, job_id, stats=stats, env=env_doc(job_id, terminal_build=build))
+    version = os.environ.get("FAKE_TELEMETRY_VERSION", "1")
+    extra = {"tracking": TRACKING} if version == "2" else {}
+    write_telemetry(common, job_id, stats=stats, version=version,
+                    env=env_doc(job_id, terminal_build=build, telemetry_version=version, **extra))
     (data_dir / f"{kv['Report']}.htm").write_bytes(codecs.BOM_UTF16_LE + "<html>report</html>".encode("utf-16-le"))
     if mode != "no_success":
         log(data_dir, 'last test passed with result "successfully finished" in 0:00:00.216')

@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: P2 metrics tables (run_metrics, metric_check, period_performance)
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -24,6 +24,9 @@ _APPEND_ONLY = (
     "artifact",
     "job_artifact",
     "mt5_reported_metrics",
+    "run_metrics",
+    "metric_check",
+    "period_performance",
 )
 
 _DDL = """
@@ -123,6 +126,39 @@ CREATE TABLE IF NOT EXISTS job_artifact (
     PRIMARY KEY (job_id, role, name)
 );
 
+CREATE TABLE IF NOT EXISTS run_metrics (
+    job_id TEXT NOT NULL REFERENCES job(job_id),
+    metric_def_version TEXT NOT NULL,
+    metrics_json TEXT NOT NULL,
+    unavailable_json TEXT NOT NULL,
+    telemetry_version TEXT NOT NULL,
+    code_version TEXT NOT NULL,
+    computed_at TEXT NOT NULL,
+    PRIMARY KEY (job_id, metric_def_version)
+);
+
+CREATE TABLE IF NOT EXISTS metric_check (
+    job_id TEXT NOT NULL REFERENCES job(job_id),
+    metric_def_version TEXT NOT NULL,
+    name TEXT NOT NULL,
+    ours TEXT,
+    mt5 TEXT,
+    diff REAL,
+    status TEXT NOT NULL,
+    PRIMARY KEY (job_id, metric_def_version, name)
+);
+
+CREATE TABLE IF NOT EXISTS period_performance (
+    job_id TEXT NOT NULL REFERENCES job(job_id),
+    metric_def_version TEXT NOT NULL,
+    bucket_type TEXT NOT NULL,
+    bucket_key TEXT NOT NULL,
+    net_profit REAL NOT NULL,
+    trades INTEGER NOT NULL,
+    balance_max_dd REAL NOT NULL,
+    PRIMARY KEY (job_id, metric_def_version, bucket_type, bucket_key)
+);
+
 CREATE TABLE IF NOT EXISTS mt5_reported_metrics (
     job_id TEXT NOT NULL REFERENCES job(job_id),
     name TEXT NOT NULL,
@@ -167,6 +203,9 @@ class Database:
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
+            elif row["version"] == 1:
+                # v1 -> v2 only adds tables (created above by the idempotent DDL)
+                self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported schema version {row['version']} (expected {SCHEMA_VERSION})")
 
