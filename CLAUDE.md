@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2・指標の自前計算 MetricEngine m2）は完了（2026-10-10 実機確認合格）。P3（完全グリッド最適化・全パス取込・試行回数台帳）も完了（2026-10-11 実機 E2E 合格）。P4（初期フィルタ: 戦略プロファイル・PSR ゲート・全ゲート記録）は実装済みで、動作確認待ち。
+P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2・指標の自前計算 MetricEngine m2）は完了（2026-10-10 実機確認合格）。P3（完全グリッド最適化・全パス取込・試行回数台帳）も完了（2026-10-11 実機 E2E 合格）。P4（初期フィルタ: 戦略プロファイル・PSR ゲート・全ゲート記録）も完了（2026-10-11）。
 
 ## 主要ドキュメント
 
@@ -9,7 +9,7 @@ P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
-- P4 計画（実装済み、C51〜C55）: `docs/plans/P4_PLAN.md`、PSR の入力定義: `docs/metrics_definitions.md`、プロファイル: `configs/strategy_profiles.yaml`
+- P4 計画（完了、C51〜C55）: `docs/plans/P4_PLAN.md`、PSR の入力定義: `docs/metrics_definitions.md`、プロファイル: `configs/strategy_profiles.yaml`
 - P3 計画（完了、C40〜C50）: `docs/plans/P3_PLAN.md`、実機確認: `verification/p3/RECORD.md`、E2E 手順: `docs/runbooks/P3_E2E.md`
 - P1 計画（§15 が確定事項）: `docs/plans/P1_PLAN.md`、実機確認の記録: `verification/p1/RECORD.md`
 - P2 計画: `docs/plans/P2_PLAN.md`、指標定義: `docs/metrics_definitions.md`
