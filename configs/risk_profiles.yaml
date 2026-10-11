@@ -1,0 +1,26 @@
+# Risk profiles for P9 (P9_PLAN §3, Q1-Q7 approved 2026-10-11).
+# Fixed BEFORE a run: the content is hashed into every P9 execution. Values may only make a lot smaller;
+# there is no setting that rounds a lot up to the broker minimum or relaxes a limit.
+profiles:
+  default:
+    description: "risk1: safe lot from DD / ruin / stop-out in every stress scenario, then min with Kelly, cap, margin"
+    horizon_days: 252        # one year of trading days, fixed lot, no compounding
+    n_paths: 10000           # per scenario
+    max_dd: 0.20             # Q1: P(max DD > 20%) <= 5% in S0, S1b, S2-S6, S63 each
+    dd_alpha: 0.05
+    ruin_loss: 0.50          # Q1: ruin = losing 50% of the starting equity; P <= 1% in every scenario incl. SC
+    ruin_p: 0.01
+    stop_out_p: 0.01         # Q1: P(margin level <= broker stop-out) <= 1% in every scenario incl. SC
+    streak_factor: 1.5       # Q5: S2 losing streak = ceil(1.5 x longest observed losing-day run)
+    ar_rho: 0.3              # Q5: S3 / S63 AR(1) on the demeaned P&L
+    shock_days: 63           # Q5: S4 63-day window ...
+    shock_factor: 2.0        # ... with deviations and dips x2
+    spread_factor: 2.0       # Q5: S5 2 x the cost-stress width per closing deal
+    kelly_fraction: 0.5      # ARCHITECTURE §12.3: 0.5 x mu_LCB / sigma^2
+    mu_lcb_quantile: 0.25    # mu_LCB = lower 25% bootstrap quantile of the daily mean
+    mu_lcb_reps: 2000
+    cap_per_trade: 0.01      # q99 trade loss <= 1% of equity
+    margin_budget: 0.30      # margin of the largest observed position count <= 30% of equity
+    confidence_oos_pass: 1.0 # Q2: P8a PASS and P8b PASS
+    confidence_no_oos: 0.5   # Q2: P8a PASS, P8b not run (P8b FAIL -> no allocation)
+    ramp_up: 0.25            # Q3: first allocation

@@ -31,6 +31,8 @@ robust_app = typer.Typer(no_args_is_help=True, help="Robustness: neighbourhood s
 app.add_typer(robust_app, name="robust")
 oos_app = typer.Typer(no_args_is_help=True, help="P8b OOS: one manifest, one run, the holdout is burned")
 app.add_typer(oos_app, name="oos")
+risk_app = typer.Typer(no_args_is_help=True, help="P9 risk and allocation (lots only for P8a passes, never rounded up)")
+app.add_typer(risk_app, name="risk")
 validate_app = typer.Typer(no_args_is_help=True, help="P8a validation in new periods (fixed parameters)")
 app.add_typer(validate_app, name="validate")
 select_app = typer.Typer(no_args_is_help=True, help="Selection: gates, region representatives, budget (P7)")
@@ -987,6 +989,134 @@ def oos_show(manifest_id: str, workspace: Path = WORKSPACE, as_json: bool = type
         _emit(s, True)
     else:
         _print_oos_summary(s)
+
+
+def _fmt(v: object) -> str:
+    return f"{v:.6g}" if isinstance(v, float) else str(v)
+
+
+def _print_risk_summary(s: dict, candidate: str | None = None) -> None:
+    for k in ("risk_id", "plan_id", "symbol", "equity", "account_currency", "equity_overridden", "snapshot_taken_at",
+              "volume_min", "volume_step", "margin_per_lot", "stop_out", "version"):
+        typer.echo(f"{k}: {s[k]}")
+    p = s["profile"]
+    typer.echo(f"limits: P(DD > {p['max_dd']:.0%}) <= {p['dd_alpha']:.0%}; P(lose {p['ruin_loss']:.0%}) <= "
+               f"{p['ruin_p']:.0%}; P(stop-out) <= {p['stop_out_p']:.0%}; {p['horizon_days']} days, "
+               f"{p['n_paths']} paths per scenario, 95% upper bounds")
+    for r in s["results"]:
+        if candidate and r["candidate_id"] != candidate:
+            continue
+        typer.echo(f"candidate {r['candidate_id']}: {r['outcome']}  (eligibility {r['eligibility']})")
+        if r["eligibility"] == "DIAGNOSTIC":
+            typer.echo("  DIAGNOSTIC: not a candidate for allocation (no P8a pass); risk per lot only, no lot")
+        if r.get("error"):
+            typer.echo(f"  error: {r['error']}")
+        if "lot_target" in r:
+            typer.echo(f"  lot: {r['lot']}  (target {_fmt(r['lot_target'])} = raw {_fmt(r['lot_raw'])} x confidence "
+                       f"{r['confidence_weight']} x ramp-up {r['ramp_up']}; rounded DOWN)")
+            typer.echo(f"  limits (lots): " + ", ".join(f"{k} {_fmt(v)}" for k, v in r["limits"].items())
+                       + f"; binding {r['binding_constraint']}; safe lot set by {r['safe_binding']}")
+            if r["outcome"] in ("INFEASIBLE_MIN_LOT", "MARGIN_BUDGET_EXCEEDED"):
+                need = r["sizing_notes"].get("equity_needed_for_min_lot")
+                typer.echo(f"  not rounded up to the minimum lot {s['volume_min']}; equity that would make the minimum "
+                           f"lot fit these limits: {_fmt(need)} {s['account_currency']} (information only, nothing is "
+                           "allocated automatically)")
+        if r.get("at_final_lot"):
+            typer.echo("  at the final lot (upper bound 95% / limit):")
+            for n, kv in r["at_final_lot"].items():
+                typer.echo(f"    {n}: " + ", ".join(f"{k} {_fmt(v['upper_bound_95'])}/{v['limit']}" for k, v in kv.items())
+                           + f"; DD vs equity q95 {r['dd_vs_equity_at_final_lot'][n]['q95']:.2%} "
+                             f"q99 {r['dd_vs_equity_at_final_lot'][n]['q99']:.2%}")
+        if r.get("scenarios"):
+            typer.echo(f"  risk per 1 lot ({s['account_currency']}):")
+            for n, it in r["scenarios"].items():
+                pl = it["per_lot"]
+                typer.echo(f"    {n} [{it['role']}]: max DD q50 {_fmt(pl['max_dd_per_lot_q50'])} q95 "
+                           f"{_fmt(pl['max_dd_per_lot_q95'])} q99 {_fmt(pl['max_dd_per_lot_q99'])}; underwater days q95 "
+                           f"{_fmt(pl['underwater_days_q95'])}; below peak at end {pl['share_below_peak_at_end']:.1%}; "
+                           f"losing-day run q95 {_fmt(pl['losing_days_run_q95'])}")
+        if r.get("observed"):
+            o = r["observed"]
+            typer.echo(f"  observed: longest losing days {o['longest_losing_days']}, losing trades "
+                       f"{o['longest_losing_trades']}, max floating loss per lot {_fmt(o['max_floating_loss_per_lot'])}, "
+                       f"min margin level {o['min_margin_level']}")
+    for n in s["notes"]:
+        typer.echo(f"note: {n}")
+
+
+@risk_app.command("snapshot")
+def risk_snapshot(symbol: str = typer.Option(..., "--symbol"),
+                  cost: Path = typer.Option(Path("configs/cost_stress.yaml"), "--cost"),
+                  out: Path | None = typer.Option(None, "--out", help="Default: <workspace>/risk_snapshots/"),
+                  workspace: Path = WORKSPACE) -> None:
+    """Windows only: broker values from the running terminal (no login, name or server is stored)."""
+    import datetime as dt
+
+    from robustlab.config.loader import ConfigError, load_cost_stress
+    from robustlab.risk import snapshot as snp
+
+    try:
+        import MetaTrader5 as mt5  # type: ignore[import-not-found]
+    except ImportError:
+        typer.echo("the MetaTrader5 package is not available (Windows only)", err=True)
+        raise typer.Exit(1)
+    try:
+        cs, _ = load_cost_stress(cost)
+    except ConfigError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
+    if symbol not in cs.symbols:
+        typer.echo(f"{symbol} has no cost-stress width in {cost}", err=True)
+        raise typer.Exit(1)
+    try:
+        snap = snp.take(mt5, symbol, cs.symbols[symbol].extra_price_per_round_trip)
+    except snp.SnapshotError as e:
+        typer.echo(f"snapshot failed: {e}", err=True)
+        raise typer.Exit(2) from e
+    path = out or workspace / "risk_snapshots" / f"{symbol}_{dt.datetime.now():%Y%m%d_%H%M%S}.json"
+    digest = snp.save(snap, path)
+    typer.echo(f"snapshot: {path}")
+    typer.echo(f"sha256: {digest}")
+    for k in ("account", "symbol_info", "price", "margin_per_lot", "stress_cost_per_lot"):
+        typer.echo(f"{k}: {snap[k]}")
+
+
+@risk_app.command("run")
+def risk_run(plan_id: str, snapshot: Path = typer.Option(..., "--snapshot", exists=True, dir_okay=False),
+             profile: str = typer.Option("default", "--profile"),
+             profiles: Path = typer.Option(Path("configs/risk_profiles.yaml"), "--profiles"),
+             equity: float | None = typer.Option(None, "--equity", help="What-if equity (recorded as overridden)"),
+             candidate: str | None = typer.Option(None, "--candidate"),
+             workspace: Path = WORKSPACE) -> None:
+    from robustlab.risk.run import run
+
+    out = run(workspace, plan_id, snapshot, profiles, profile, equity, candidate)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        _print_risk_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@risk_app.command("show")
+def risk_show(risk_id: str, candidate: str | None = typer.Option(None, "--candidate"),
+              workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.risk.run import RiskError, summarize
+
+    db = _open(workspace)
+    try:
+        try:
+            s = summarize(db, risk_id)
+        except RiskError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+    finally:
+        db.close()
+    if as_json:
+        _emit(s, True)
+    else:
+        _print_risk_summary(s, candidate)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -13,8 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 9  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
-#                     6: P6 statistics; 7: P7 selection; 8: P8a validation; 9: P8b OOS
+SCHEMA_VERSION = 10  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
+#                     6: P6 statistics; 7: P7 selection; 8: P8a validation; 9: P8b OOS; 10: P9 risk
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -48,6 +48,8 @@ _APPEND_ONLY = (
     "holdout_state",
     "oos_run",
     "oos_access_log",
+    "risk_execution",
+    "risk_result",
 )
 
 _DDL = """
@@ -491,6 +493,33 @@ CREATE TABLE IF NOT EXISTS oos_access_log (
     accessed_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS risk_execution (
+    risk_id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL REFERENCES validation_plan(plan_id),
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    symbol TEXT NOT NULL,
+    candidates_json TEXT NOT NULL,
+    profile_name TEXT NOT NULL,
+    profile_json TEXT NOT NULL,
+    profile_hash TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    snapshot_hash TEXT NOT NULL,
+    equity REAL NOT NULL,
+    equity_overridden INTEGER NOT NULL,
+    component_version TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS risk_result (
+    risk_id TEXT NOT NULL REFERENCES risk_execution(risk_id),
+    candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
+    status TEXT NOT NULL,
+    seed INTEGER NOT NULL,
+    values_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (risk_id, candidate_id)
+);
+
 CREATE TABLE IF NOT EXISTS decision (
     decision_id TEXT PRIMARY KEY,
     candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
@@ -505,7 +534,8 @@ CREATE TABLE IF NOT EXISTS decision (
     created_at TEXT NOT NULL,
     sel_id TEXT,
     plan_id TEXT,
-    manifest_id TEXT
+    manifest_id TEXT,
+    risk_id TEXT
 );
 CREATE INDEX IF NOT EXISTS decision_candidate ON decision(candidate_id);
 CREATE INDEX IF NOT EXISTS decision_filter ON decision(filter_id);
@@ -566,11 +596,13 @@ class Database:
             self.conn.execute("ALTER TABLE decision ADD COLUMN plan_id TEXT")
         if "manifest_id" not in dcols:  # v8 -> v9
             self.conn.execute("ALTER TABLE decision ADD COLUMN manifest_id TEXT")
+        if "risk_id" not in dcols:  # v9 -> v10
+            self.conn.execute("ALTER TABLE decision ADD COLUMN risk_id TEXT")
         with self.tx():
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
-            elif row["version"] in (1, 2, 3, 4, 5, 6, 7, 8):
+            elif row["version"] in (1, 2, 3, 4, 5, 6, 7, 8, 9):
                 # every step so far only adds tables (created above by the idempotent DDL)
                 self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:

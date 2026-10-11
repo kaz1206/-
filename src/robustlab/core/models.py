@@ -295,6 +295,53 @@ class SelectionProfileFile(_Strict):
     profiles: dict[str, SelectionProfile]
 
 
+class RiskProfile(_Strict):
+    """P9 limits, stresses and sizing, fixed before the run (P9_PLAN §3, Q1-Q7 approved 2026-10-11). Hashed into
+    every P9 execution. There is deliberately no setting that rounds a lot up or relaxes a limit."""
+
+    description: str = ""
+    horizon_days: int = 252
+    n_paths: int = 10000
+    max_dd: float = 0.20
+    dd_alpha: float = 0.05
+    ruin_loss: float = 0.50
+    ruin_p: float = 0.01
+    stop_out_p: float = 0.01
+    streak_factor: float = 1.5
+    ar_rho: float = 0.3
+    shock_days: int = 63
+    shock_factor: float = 2.0
+    spread_factor: float = 2.0
+    kelly_fraction: float = 0.5
+    mu_lcb_quantile: float = 0.25
+    mu_lcb_reps: int = 2000
+    cap_per_trade: float = 0.01
+    margin_budget: float = 0.30
+    confidence_oos_pass: float = 1.0
+    confidence_no_oos: float = 0.5
+    ramp_up: float = 0.25
+
+    @model_validator(mode="after")
+    def _valid(self) -> RiskProfile:
+        for k in ("max_dd", "dd_alpha", "ruin_loss", "ruin_p", "stop_out_p", "kelly_fraction", "mu_lcb_quantile",
+                  "cap_per_trade", "margin_budget"):
+            if not 0 < getattr(self, k) < 1:
+                raise ValueError(f"{k} must be in (0, 1)")
+        for k in ("confidence_oos_pass", "confidence_no_oos", "ramp_up"):
+            if not 0 < getattr(self, k) <= 1:
+                raise ValueError(f"{k} must be in (0, 1] (it may only shrink a lot)")
+        if self.horizon_days < 20 or self.n_paths < 1000 or self.mu_lcb_reps < 100:
+            raise ValueError("horizon_days >= 20, n_paths >= 1000 and mu_lcb_reps >= 100 are required")
+        if self.shock_days > self.horizon_days or self.shock_factor < 1 or self.spread_factor < 1 \
+                or self.streak_factor < 1 or not 0 <= self.ar_rho < 1:
+            raise ValueError("stresses may not be weaker than none (factors >= 1, 0 <= ar_rho < 1)")
+        return self
+
+
+class RiskProfileFile(_Strict):
+    profiles: dict[str, RiskProfile]
+
+
 class ValidationPeriod(_Strict):
     name: str
     from_date: dt.date = Field(alias="from")

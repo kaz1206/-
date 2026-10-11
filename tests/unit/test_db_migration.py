@@ -13,7 +13,8 @@ from robustlab.storage.db import SCHEMA_VERSION, Database
                                              (6, ["selection_execution"]),
                                              (7, ["validation_plan", "validation_run", "period_exposure",
                                                   "validation_access_log"]),
-                                             (8, ["oos_manifest", "holdout_state", "oos_run", "oos_access_log"])])
+                                             (8, ["oos_manifest", "holdout_state", "oos_run", "oos_access_log"]),
+                                             (9, ["risk_execution", "risk_result"])])
 def test_old_database_is_migrated(tmp_path, old, dropped):
     path = tmp_path / "w.sqlite"
     Database(path).close()
@@ -25,7 +26,7 @@ def test_old_database_is_migrated(tmp_path, old, dropped):
     con.close()
     db = Database(path)
     try:
-        assert db.one("SELECT version FROM schema_version")["version"] == SCHEMA_VERSION == 9
+        assert db.one("SELECT version FROM schema_version")["version"] == SCHEMA_VERSION == 10
         for t in dropped:
             assert db.one("SELECT name FROM sqlite_master WHERE name = ?", (t,)) is not None
     finally:
@@ -45,7 +46,7 @@ def test_v5_evaluation_gets_the_stat_id_column(tmp_path):
     try:
         cols = {r["name"] for r in db.all("PRAGMA table_info(evaluation)")}
         assert {"robust_id", "stat_id"} <= cols
-        assert db.one("SELECT version FROM schema_version")["version"] == 9
+        assert db.one("SELECT version FROM schema_version")["version"] == 10
     finally:
         db.close()
 
@@ -62,7 +63,25 @@ def test_v6_decision_gets_the_sel_id_column(tmp_path):
     db = Database(path)
     try:
         assert "sel_id" in {r["name"] for r in db.all("PRAGMA table_info(decision)")}
-        assert db.one("SELECT version FROM schema_version")["version"] == 9
+        assert db.one("SELECT version FROM schema_version")["version"] == 10
+    finally:
+        db.close()
+
+
+def test_v9_decision_gets_the_risk_id_column(tmp_path):
+    path = tmp_path / "w.sqlite"
+    Database(path).close()
+    con = sqlite3.connect(path)
+    con.execute("DROP TABLE risk_result")
+    con.execute("DROP TABLE risk_execution")
+    con.execute("ALTER TABLE decision DROP COLUMN risk_id")
+    con.execute("UPDATE schema_version SET version = 9")
+    con.commit()
+    con.close()
+    db = Database(path)
+    try:
+        assert "risk_id" in {r["name"] for r in db.all("PRAGMA table_info(decision)")}
+        assert db.one("SELECT version FROM schema_version")["version"] == 10
     finally:
         db.close()
 
@@ -75,7 +94,7 @@ def test_research_tables_of_p3_p4_are_append_only(tmp_path):
                   "evaluation", "decision", "reason_code", "robustness_execution", "parameter_region",
                   "statistics_execution", "selection_execution", "validation_plan", "validation_run",
                   "period_exposure", "validation_access_log", "oos_manifest", "holdout_state", "oos_run",
-                  "oos_access_log"):
+                  "oos_access_log", "risk_execution", "risk_result"):
             assert {f"{t}_no_update", f"{t}_no_delete"} <= names
         with pytest.raises(ValueError):
             db.update_job("x", table="pass_result", status="X")

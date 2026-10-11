@@ -1,0 +1,53 @@
+# uv run python docs/research/p9_validation/run_checks.py r1 r2:D1..D7 r4:iid|garch|ar1 r3a:D1|D3|D4|D7 (production engine, seed 20261011, 200 repetitions, 4,000 paths per scenario, 20,000 true paths)
+R1a (production): mismatches 0 of 2400 -> OK
+R1b (production) sr=+0.00 k=15: simulated 0.65110, closed form 0.64791 -> OK
+R1b (production) sr=+0.00 k=25: simulated 0.77525, closed form 0.77283 -> OK
+R1b (production) sr=+0.05 k=20: simulated 0.51150, closed form 0.50984 -> OK
+R1b (production) sr=+0.05 k=30: simulated 0.62462, closed form 0.62755 -> OK
+R1b (production) sr=+0.10 k=30: simulated 0.45148, closed form 0.44914 -> OK
+R1b (production) sr=-0.03 k=15: simulated 0.77612, closed form 0.77884 -> OK
+R1b: OK
+R1c (production) sr=+0.00 k=2.0: simulated 0.00146, closed form 0.00144 -> OK
+R1c (production) sr=+0.00 k=2.5: simulated 0.01095, closed form 0.01057 -> OK
+R1c (production) sr=+0.00 k=3.0: simulated 0.03310, closed form 0.03264 -> OK
+R1c (production) sr=+0.05 k=3.0: simulated 0.00464, closed form 0.00471 -> OK
+R1c (production) sr=+0.05 k=4.0: simulated 0.02437, closed form 0.02409 -> OK
+R1c (production) sr=-0.03 k=2.5: simulated 0.03294, closed form 0.03259 -> OK
+R1c: OK
+R2 D1 (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0001, 90th pct 0.0001; share(ruin ok) = 1.000; k_safe/k_oracle median 0.455 [10%-90%: 0.437-0.472] -> OK
+R2 D1 (production): S0 only: share(DD ok) = 0.545; k_S0/k_oracle median 0.971
+R2 D1 (production): binding {'S63:dd': 200}
+R2 D2 (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0003, 90th pct 0.0005; share(ruin ok) = 1.000; k_safe/k_oracle median 0.462 [10%-90%: 0.426-0.493] -> OK
+R2 D2 (production): S0 only: share(DD ok) = 0.495; k_S0/k_oracle median 1.003
+R2 D2 (production): binding {'S63:dd': 200}
+R2 D3 (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0002, 90th pct 0.0004; share(ruin ok) = 1.000; k_safe/k_oracle median 0.463 [10%-90%: 0.434-0.490] -> OK
+R2 D3 (production): S0 only: share(DD ok) = 0.545; k_S0/k_oracle median 0.985
+R2 D3 (production): binding {'S63:dd': 198, 'S2:dd': 2}
+R2 D4 (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0004, 90th pct 0.0009; share(ruin ok) = 1.000; k_safe/k_oracle median 0.526 [10%-90%: 0.484-0.558] -> OK
+R2 D4 (production): S0 only: share(DD ok) = 0.385; k_S0/k_oracle median 1.055
+R2 D4 (production): binding {'S63:dd': 194, 'S3:dd': 4, 'S2:dd': 2}
+R2 D5 (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0147, 90th pct 0.0191; share(ruin ok) = 1.000; k_safe/k_oracle median 0.801 [10%-90%: 0.769-0.837] -> OK
+R2 D5 (production): S0 only: share(DD ok) = 0.005; k_S0/k_oracle median 1.708
+R2 D5 (production): binding {'S63:dd': 197, 'S2:dd': 2, 'S3:dd': 1}
+R2 D6 (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0053, 90th pct 0.0081; share(ruin ok) = 1.000; k_safe/k_oracle median 0.734 [10%-90%: 0.708-0.767] -> OK
+R2 D6 (production): S0 only: share(DD ok) = 0.000; k_S0/k_oracle median 1.403
+R2 D6 (production): binding {'S63:dd': 200}
+R2 D7 (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0009, 90th pct 0.0021; share(ruin ok) = 1.000; k_safe/k_oracle median 0.566 [10%-90%: 0.523-0.615] -> OK (recorded only)
+R2 D7 (production): S0 only: share(DD ok) = 0.340; k_S0/k_oracle median 1.084
+R2 D7 (production): binding {'S63:dd': 191, 'S3:dd': 5, 'S2:dd': 4}
+R4 ar1 (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0107, 90th pct 0.0168; share(ruin ok) = 1.000; k_safe/k_oracle median 0.792 [10%-90%: 0.745-0.840] -> OK
+R4 ar1 (production): S0 only: share(DD ok) = 0.000; k_S0/k_oracle median 2.099
+R4 ar1 (production): binding {'S63:dd': 200}
+R4 ar1 (production): P8a acceptance 200/19031; mean validation daily Sharpe 0.1311
+R4 garch (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0069, 90th pct 0.0113; share(ruin ok) = 1.000; k_safe/k_oracle median 0.746 [10%-90%: 0.705-0.794] -> OK
+R4 garch (production): S0 only: share(DD ok) = 0.000; k_S0/k_oracle median 1.867
+R4 garch (production): binding {'S63:dd': 200}
+R4 garch (production): P8a acceptance 200/22988; mean validation daily Sharpe 0.1101
+R4 iid (production): share(true P(DD>20%) <= 5%) = 1.000, median 0.0056, 90th pct 0.0081; share(ruin ok) = 1.000; k_safe/k_oracle median 0.739 [10%-90%: 0.714-0.769] -> OK
+R4 iid (production): S0 only: share(DD ok) = 0.000; k_S0/k_oracle median 1.863
+R4 iid (production): binding {'S63:dd': 200}
+R4 iid (production): P8a acceptance 200/21604; mean validation daily Sharpe 0.1098
+R3a D1 (production): k_S1a/k_S1b median 1.029; k_S1b/k_S0 median 1.001
+R3a D3 (production): k_S1a/k_S1b median 1.029; k_S1b/k_S0 median 1.003
+R3a D4 (production): k_S1a/k_S1b median 1.034; k_S1b/k_S0 median 1.188
+R3a D7 (production): k_S1a/k_S1b median 1.030; k_S1b/k_S0 median 1.441

@@ -14,6 +14,8 @@ from robustlab.core.models import (
     BacktestRequest,
     DataPartition,
     ProfileFile,
+    RiskProfile,
+    RiskProfileFile,
     CostStressFile,
     SelectionProfile,
     SelectionProfileFile,
@@ -108,6 +110,15 @@ def load_selection_profile(path: Path, name: str) -> tuple[SelectionProfile, str
     pf = _parse(SelectionProfileFile, path, load_yaml(path))
     if name not in pf.profiles:
         raise ConfigError(f"{path}: unknown selection profile {name!r} (have {sorted(pf.profiles)})")
+    prof = pf.profiles[name]
+    return prof, sha256_hex(canonical_json({"name": name, **prof.model_dump(mode="json")}))
+
+
+def load_risk_profile(path: Path, name: str) -> tuple[RiskProfile, str]:
+    """One P9 risk profile and the hash of its content (recorded with every P9 execution)."""
+    pf = _parse(RiskProfileFile, path, load_yaml(path))
+    if name not in pf.profiles:
+        raise ConfigError(f"{path}: unknown risk profile {name!r} (have {sorted(pf.profiles)})")
     prof = pf.profiles[name]
     return prof, sha256_hex(canonical_json({"name": name, **prof.model_dump(mode="json")}))
 
