@@ -4,7 +4,7 @@ Gate per candidate: conservative PSR(0) on the pooled validation daily returns (
 Newey-West n* / stationary-bootstrap SE, i.e. robustlab.stats.dsr.deflated with N = 1), family of K selected
 candidates controlled with Holm at alpha = 5% (p = 1 - PSR_conservative).
 n = 630 validation days (about V0 2020-01..2021-12 + V1 2024-01..2024-06). Seed 20261011.
-Usage: uv run python docs/research/p8_simulations/validation_gate.py <reps>
+Usage: uv run python docs/research/p8_simulations/validation_gate.py <reps> [case index ...]
 """
 import sys
 
@@ -81,16 +81,16 @@ def run(name, kind, k, rho, mus, reps):
     print(s, flush=True)
 
 
+CASES = (
+    [(f"K=1 {k}", k, 1, 0.0, [0.0]) for k in ("iid", "ar1_0.4", "ar2", "ma5", "garch_ar1")]
+    + [(f"K=5 {k} corr 0.5", k, 5, 0.5, [0.0] * 5) for k in ("iid", "ar2")]
+    + [(f"K=5 {k} edge {mu}", k, 5, 0.5, [mu, 0, 0, 0, 0]) for k in ("iid", "ar1_0.2") for mu in (0.05, 0.08, 0.12)]
+    + [(f"K=1 iid edge {mu}", "iid", 1, 0.0, [mu]) for mu in (0.05, 0.08, 0.12)]
+)
+
 if __name__ == "__main__":
+    # usage: validation_gate.py <reps> [case index ...]  (no index = all cases in order)
     R = int(sys.argv[1])
-    print("-- size: K selected candidates, all without edge --")
-    for kind in ("iid", "ar1_0.4", "ar2", "ma5", "garch_ar1"):
-        run(f"K=1 {kind}", kind, 1, 0.0, [0.0], R)
-    for kind in ("iid", "ar2"):
-        run(f"K=5 {kind} corr 0.5", kind, 5, 0.5, [0.0] * 5, R)
-    print("-- power: one candidate with a true daily Sharpe, 4 without (K=5, corr 0.5) --")
-    for kind in ("iid", "ar1_0.2"):
-        for mu in (0.05, 0.08, 0.12):
-            run(f"K=5 {kind} edge {mu}", kind, 5, 0.5, [mu, 0, 0, 0, 0], R)
-    for mu in (0.05, 0.08, 0.12):
-        run(f"K=1 iid edge {mu}", "iid", 1, 0.0, [mu], R)
+    picks = [int(i) for i in sys.argv[2:]] or range(len(CASES))
+    for i in picks:
+        run(*CASES[i], R)
