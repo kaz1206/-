@@ -19,3 +19,12 @@
     K=1 iid edge               power 0.3330 / 0.6145 / 0.8960
 
 本体（`src/`）からは参照しない。実装では本番の関数で同じ実験を合格基準つきのテストとして書き直す。
+
+## 第 3 版の検証（H1〜H4、`validation_gate2.py`、2026-10-11）
+
+V0（516 日）と V1（115 日）を別々に生成し、P8_PLAN §4.2.1 の期間別の集約で p 値を計算した。基準はコミット 82ebd94 で実行前に固定。結果は P8_PLAN §4.4。第 2 版の `validation_gate.py`（1 本につないだ系列）は参考として残し、判定には使わない。
+
+    uv run python docs/research/p8_simulations/validation_gate2.py h1:iid h1:ar1_0.4 h1:ma5 h1:garch_ar1 h1:vol2 h1:ar2
+    uv run python docs/research/p8_simulations/validation_gate2.py h2
+    uv run python docs/research/p8_simulations/validation_gate2.py h3:iid:0.5 h3:iid:0.9 h3:garch_ar1:0.5 h3:ar2:0.5 h3:ar2:0.9
+    uv run python docs/research/p8_simulations/validation_gate2.py h4:iid:1:0.05 h4:iid:5:0.08 h4:ar1_0.2:5:0.12   # など
