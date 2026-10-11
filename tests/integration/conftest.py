@@ -12,6 +12,9 @@ FAKE = Path(__file__).with_name("fake_terminal.py")
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
+    if sys.platform == "win32":
+        # the fake terminal is a POSIX shell script plus a symlink; these end-to-end tests run on Linux
+        pytest.skip("integration tests need the POSIX fake terminal (run them on Linux)")
     data = tmp_path / "mt5"
     (data / "MQL5" / "Experts" / "RobustLab").mkdir(parents=True)
     (data / "MQL5" / "Experts" / "RobustLab" / "RL_SmokeTest.ex5").write_bytes(b"ex5-binary")

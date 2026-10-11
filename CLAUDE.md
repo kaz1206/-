@@ -9,7 +9,7 @@ P1〜P5 は完了（P5 まで実機確認合格）。P6（DSR・ブートスト�
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
-- P6 計画（承認待ち）: `docs/plans/P6_PLAN.md`
+- P6 計画（承認済み・実装済み、C61〜C67）: `docs/plans/P6_PLAN.md`、検証結果: `docs/research/p6_validation/RESULTS.md`
 - P5 計画（完了、C56〜C60）: `docs/plans/P5_PLAN.md`
 - P4 計画（完了、C51〜C55）: `docs/plans/P4_PLAN.md`、PSR の入力定義: `docs/metrics_definitions.md`、プロファイル: `configs/strategy_profiles.yaml`
 - P3 計画（完了、C40〜C50）: `docs/plans/P3_PLAN.md`、実機確認: `verification/p3/RECORD.md`、E2E 手順: `docs/runbooks/P3_E2E.md`
@@ -59,7 +59,7 @@ P1〜P5 は完了（P5 まで実機確認合格）。P6（DSR・ブートスト�
 ## コマンド
 
 - 依存関係: `uv sync`（ロックファイル `uv.lock`。Python 3.12/3.13）
-- テスト: `uv run pytest`（Linux で全テストが動く。MT5 は偽の端末 `tests/integration/fake_terminal.py` で代替。P6 のモンテカルロ検証 `tests/validation/` を含めて 3〜4 分）
+- テスト: `uv run pytest`（Linux で全テストが動く。MT5 は偽の端末 `tests/integration/fake_terminal.py` で代替。P6 のモンテカルロ検証 `tests/validation/` を含めて 3〜4 分。Windows では偽の端末が動かないため `tests/integration/` は skip になる）
 - CLI: `uv run rlab backtest run <request.yaml> [--rerun]` / `rlab backtest show <run_id>` / `rlab jobs list` / `rlab metrics compute <job_id|--all>` / `rlab metrics show <run_id>`
 - CLI（P4〜P6）: `rlab filter run <round_id> --profile <name>` / `rlab why-not <candidate_id>` / `rlab robust run <round_id> --filter <filter_id>` / `rlab stats run <round_id> --filter <filter_id> [--candidate <cd>] [--reps 2000] [--seed N]` / `rlab stats show <stat_id> [--candidate <cd>]`
 - CLI（P3）: `rlab optimize run <study.yaml> [--rerun]` / `rlab optimize show <round_id>` / `rlab optimize pass <round_id> <candidate_id>` / `rlab trials show <strategy_family>`
