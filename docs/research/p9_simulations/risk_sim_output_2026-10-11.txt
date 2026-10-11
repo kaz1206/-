@@ -1,0 +1,31 @@
+# uv run python docs/research/p9_simulations/risk_sim.py r1 ; r2:D1 .. r2:D7 (seed 20261011, 200 repetitions, 4,000 paths per scenario, 20,000 true paths)
+R1a: mismatches 0 of 2400 -> OK
+R1b sr=+0.00 k=15: simulated 0.6511, closed form 0.6479, se 0.0024 -> OK
+R1b sr=+0.00 k=25: simulated 0.7752, closed form 0.7728, se 0.0021 -> OK
+R1b sr=+0.05 k=20: simulated 0.5115, closed form 0.5098, se 0.0025 -> OK
+R1b sr=+0.05 k=30: simulated 0.6246, closed form 0.6276, se 0.0024 -> OK
+R1b sr=+0.10 k=30: simulated 0.4515, closed form 0.4491, se 0.0025 -> OK
+R1b sr=-0.03 k=15: simulated 0.7761, closed form 0.7788, se 0.0021 -> OK
+R1b: OK
+R1c sr=+0.00 k=2.0: simulated 0.00146, closed form 0.00144, se 0.00008 -> OK
+R1c sr=+0.00 k=2.5: simulated 0.01095, closed form 0.01057, se 0.00023 -> OK
+R1c sr=+0.00 k=3.0: simulated 0.03310, closed form 0.03264, se 0.00040 -> OK
+R1c sr=+0.05 k=3.0: simulated 0.00464, closed form 0.00471, se 0.00015 -> OK
+R1c sr=+0.05 k=4.0: simulated 0.02437, closed form 0.02409, se 0.00034 -> OK
+R1c sr=-0.03 k=2.5: simulated 0.03294, closed form 0.03259, se 0.00040 -> OK
+R1c: OK
+R2 D2: full: share(true P(DD>20%) <= 5%) = 1.000, median true P(DD>20%) = 0.0015, 90th pct 0.0026; share(true P(ruin) <= 1%) = 1.000; k_safe/k_oracle median 0.563 [10%-90%: 0.521-0.604] -> OK
+R2 D2: S0 only: share(true P(DD>20%) <= 5%) = 0.505, median 0.0489, 90th pct 0.1241; share(ruin ok) = 1.000; k_S0/k_oracle median 0.995
+R2 D2: binding {'SC:ruin': 168, 'S4:dd': 29, 'S2:dd': 3}; mean block length 1.50
+R2 D3: full: share(true P(DD>20%) <= 5%) = 1.000, median true P(DD>20%) = 0.0013, 90th pct 0.0024; share(true P(ruin) <= 1%) = 1.000; k_safe/k_oracle median 0.568 [10%-90%: 0.520-0.605] -> OK
+R2 D3: S0 only: share(true P(DD>20%) <= 5%) = 0.505, median 0.0496, 90th pct 0.1150; share(ruin ok) = 1.000; k_S0/k_oracle median 0.998
+R2 D3: binding {'SC:ruin': 163, 'S4:dd': 24, 'S3:dd': 7, 'S2:dd': 6}; mean block length 1.58
+R2 D4: full: share(true P(DD>20%) <= 5%) = 1.000, median true P(DD>20%) = 0.0026, 90th pct 0.0047; share(true P(ruin) <= 1%) = 1.000; k_safe/k_oracle median 0.632 [10%-90%: 0.561-0.676] -> OK
+R2 D4: S0 only: share(true P(DD>20%) <= 5%) = 0.425, median 0.0570, 90th pct 0.1547; share(ruin ok) = 1.000; k_S0/k_oracle median 1.033
+R2 D4: binding {'SC:ruin': 133, 'S4:dd': 38, 'S3:dd': 21, 'S2:dd': 8}; mean block length 3.51
+R2 D6: full: share(true P(DD>20%) <= 5%) = 0.995, median true P(DD>20%) = 0.0257, 90th pct 0.0327; share(true P(ruin) <= 1%) = 1.000; k_safe/k_oracle median 0.895 [10%-90%: 0.859-0.930] -> OK
+R2 D6: S0 only: share(true P(DD>20%) <= 5%) = 0.000, median 0.1952, 90th pct 0.2811; share(ruin ok) = 1.000; k_S0/k_oracle median 1.388
+R2 D6: binding {'SC:ruin': 160, 'S4:dd': 37, 'S3:dd': 3}; mean block length 1.55
+R2 D7: full: share(true P(DD>20%) <= 5%) = 1.000, median true P(DD>20%) = 0.0055, 90th pct 0.0113; share(true P(ruin) <= 1%) = 1.000; k_safe/k_oracle median 0.689 [10%-90%: 0.585-0.757] -> OK (recorded only)
+R2 D7: S0 only: share(true P(DD>20%) <= 5%) = 0.340, median 0.0709, 90th pct 0.1912; share(ruin ok) = 1.000; k_S0/k_oracle median 1.085
+R2 D7: binding {'SC:ruin': 112, 'S4:dd': 37, 'S3:dd': 36, 'S2:dd': 15}; mean block length 6.09

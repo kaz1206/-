@@ -81,6 +81,8 @@
 | S-KELLY | Kelly, J. L. (1956). A new interpretation of information rate. *Bell System Technical Journal*, 35(4). | Kelly 基準 | 古典（今回の調査では未読） |
 | S-MTZ | MacLean, L. C., Thorp, E. O., & Ziemba, W. T. (2010). Long-term capital growth: the good and bad properties of the Kelly and fractional Kelly capital growth criteria. *Quantitative Finance*, 10(7). / "Good and Bad Properties of the Kelly Criterion"（Berkeley Stat157 資料） | **平均の推定誤差の影響が支配的**（平均:分散:共分散 ≈ 20:2:1、対数効用では最大 約 100:3:1）。過大ベットの危険。Fractional Kelly を使う根拠 | B |
 | S-RCK | Busseti, E., Ryu, E. K., & Boyd, S. (2016). Risk-constrained Kelly gambling. *Journal of Investing*, 25(3), 118–134. arXiv:1603.06183 | 一定水準まで資産が落ち込む確率に制約を置いて成長率を最大化。凸近似で解く。**同じ DD リスクで Fractional Kelly を上回る**と報告 | B |
+| S-BGK | Broadie, M., Glasserman, P., & Kou, S. (1997). A continuity correction for discrete barrier options. *Mathematical Finance*, 7(4), 325–349. | 日次（離散）監視の到達確率を連続のブラウン運動の閉形式と比べるとき、障壁を 0.5826σ√Δt ずらす補正。P9 事前シミュレーション R1b/R1c の基準値に使用（記憶による。式は R1c で数値的に整合を確認） | B |
+| S-CP | Clopper, C. J., & Pearson, E. S. (1934). The use of confidence or fiducial limits illustrated in the case of the binomial. *Biometrika*, 26(4), 404–413. | 二項比率の正確な信頼限界（ベータ分布の分位点）。P9 で破産・DD 超過の割合をモンテカルロ誤差込みで安全側に判定する（`scipy.stats.beta.ppf`） | B |
 | S-LW | Ledoit, O., & Wolf, M. (2004). A well-conditioned estimator for large-dimensional covariance matrices. *JMVA*, 88(2). | 共分散の縮小推定（将来） | 古典（今回の調査では未読） |
 
 ## 3. 補助資料（コミュニティ等）
