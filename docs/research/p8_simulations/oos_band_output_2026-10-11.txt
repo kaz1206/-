@@ -1,0 +1,14 @@
+s1 persists iid        mu 0.05: below band 0.0520(0.04268, 0.06266)  OOS loss 0.1255  fail either 0.1405(0.12556, 0.15651)
+s1 persists iid        mu 0.08: below band 0.0520(0.04268, 0.06266)  OOS loss 0.0385  fail either 0.0680(0.05736, 0.07993)
+s1 persists iid        mu 0.12: below band 0.0515(0.04223, 0.06211)  OOS loss 0.0040  fail either 0.0520(0.04268, 0.06266)
+s2 decays to 0 iid        mu 0.08: below band 0.3630(0.34189, 0.38451)  OOS loss 0.4970  fail either 0.5605(0.53842, 0.5824)
+s1 persists ar1_0.2    mu 0.08: below band 0.0575(0.0477, 0.06862)  OOS loss 0.0710  fail either 0.0975(0.08485, 0.11135)
+s1 persists garch_ar1  mu 0.08: below band 0.0565(0.04679, 0.06754)  OOS loss 0.1175  fail either 0.1360(0.12127, 0.15181)
+s2 decays to 0 iid        mu 0.12: below band 0.6165(0.59478, 0.63788)  OOS loss 0.4970  fail either 0.6865(0.66566, 0.7068)
+s2 decays to 0 ar1_0.2    mu 0.08: below band 0.2830(0.26334, 0.3033)  OOS loss 0.5000  fail either 0.5385(0.51636, 0.56053)
+s3 no edge K=5 iid       : some candidate passes P8a 0.0380(0.03005, 0.04733)  passes P8a and OOS 0.0170(0.0118, 0.02368)
+s1 persists ar2        mu 0.08: below band 0.0905(0.07828, 0.10393)  OOS loss 0.1960  fail either 0.2185(0.20056, 0.23727)
+s3 no edge K=5 garch_ar1 : some candidate passes P8a 0.0340(0.0265, 0.04291)  passes P8a and OOS 0.0175(0.01222, 0.02425)
+s3 no edge K=5 ar2       : some candidate passes P8a 0.0880(0.07595, 0.10128)  passes P8a and OOS 0.0370(0.02916, 0.04623)
+
+[exited with code 0]
