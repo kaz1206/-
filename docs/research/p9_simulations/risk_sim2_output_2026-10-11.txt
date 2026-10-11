@@ -1,0 +1,74 @@
+# uv run python docs/research/p9_simulations/risk_sim2.py r3a:D1|D3|D4|D7 r3b:D1..D6 r4:iid|garch|ar1 (seed 20261011, 200 repetitions)
+R3a D1: DD-allowed lot S0 1.83, S1b 1.82, S1a 1.87, S1a 3-day trades 1.95
+R3a D1: k_S1a/k_S1b median 1.031 [10%-90%: 1.022-1.040]; k_S1a3/k_S1b median 1.075 [10%-90%: 1.002-1.164]; k_S1b/k_S0 median 0.996 [10%-90%: 0.960-1.030]
+R3a D3: DD-allowed lot S0 1.90, S1b 1.87, S1a 1.93, S1a 3-day trades 2.04
+R3a D3: k_S1a/k_S1b median 1.031 [10%-90%: 1.023-1.042]; k_S1a3/k_S1b median 1.078 [10%-90%: 1.000-1.163]; k_S1b/k_S0 median 0.995 [10%-90%: 0.959-1.035]
+R3a D4: DD-allowed lot S0 1.53, S1b 1.88, S1a 1.94, S1a 3-day trades 1.64
+R3a D4: k_S1a/k_S1b median 1.031 [10%-90%: 1.021-1.042]; k_S1a3/k_S1b median 0.889 [10%-90%: 0.840-0.938]; k_S1b/k_S0 median 1.198 [10%-90%: 1.128-1.304]
+R3a D7: DD-allowed lot S0 1.29, S1b 1.92, S1a 1.98, S1a 3-day trades 1.57
+R3a D7: k_S1a/k_S1b median 1.032 [10%-90%: 1.020-1.044]; k_S1a3/k_S1b median 0.818 [10%-90%: 0.769-0.878]; k_S1b/k_S0 median 1.449 [10%-90%: 1.294-1.675]
+R3b D1: share(true P(DD>20%) <= 5%) = 1.000, median 0.0008, 90th pct 0.0014; share(ruin ok) = 1.000; k_safe/k_oracle median 0.551 [10%-90%: 0.519-0.577] -> OK
+R3b D1: S0 only: share(DD ok) = 0.580, median 0.0431; k_S0/k_oracle median 0.967
+R3b D1: binding {'SC:ruin': 157, 'S4:dd': 26, 'S3:dd': 10, 'S2:dd': 7}
+R3b D2: share(true P(DD>20%) <= 5%) = 1.000, median 0.0014, 90th pct 0.0024; share(ruin ok) = 1.000; k_safe/k_oracle median 0.560 [10%-90%: 0.512-0.599] -> OK
+R3b D2: S0 only: share(DD ok) = 0.560, median 0.0443; k_S0/k_oracle median 0.972
+R3b D2: binding {'SC:ruin': 162, 'S4:dd': 30, 'S3:dd': 6, 'S2:dd': 2}
+R3b D3: share(true P(DD>20%) <= 5%) = 1.000, median 0.0013, 90th pct 0.0024; share(ruin ok) = 1.000; k_safe/k_oracle median 0.562 [10%-90%: 0.520-0.603] -> OK
+R3b D3: S0 only: share(DD ok) = 0.540, median 0.0453; k_S0/k_oracle median 0.977
+R3b D3: binding {'SC:ruin': 174, 'S4:dd': 20, 'S3:dd': 4, 'S5:dd': 1, 'S2:dd': 1}
+R3b D4: share(true P(DD>20%) <= 5%) = 1.000, median 0.0029, 90th pct 0.0054; share(ruin ok) = 1.000; k_safe/k_oracle median 0.636 [10%-90%: 0.574-0.688] -> OK
+R3b D4: S0 only: share(DD ok) = 0.395, median 0.0688; k_S0/k_oracle median 1.074
+R3b D4: binding {'SC:ruin': 142, 'S4:dd': 32, 'S3:dd': 15, 'S2:dd': 11}
+R3b D5: share(true P(DD>20%) <= 5%) = 0.785, median 0.0449, 90th pct 0.0542; share(ruin ok) = 1.000; k_safe/k_oracle median 0.977 [10%-90%: 0.906-1.017] -> NOT MET
+R3b D5: S0 only: share(DD ok) = 0.000, median 0.3008; k_S0/k_oracle median 1.705
+R3b D5: binding {'SC:ruin': 163, 'S4:dd': 27, 'S3:dd': 5, 'S2:dd': 4, 'S5:dd': 1}
+R3b D6: share(true P(DD>20%) <= 5%) = 1.000, median 0.0255, 90th pct 0.0338; share(ruin ok) = 1.000; k_safe/k_oracle median 0.895 [10%-90%: 0.853-0.931] -> OK
+R3b D6: S0 only: share(DD ok) = 0.000, median 0.1941; k_S0/k_oracle median 1.388
+R3b D6: binding {'SC:ruin': 162, 'S4:dd': 35, 'S2:dd': 2, 'S3:dd': 1}
+R4 ar1: share(true P(DD>20%) <= 5%) = 0.625, median 0.0460, 90th pct 0.0606; share(ruin ok) = 1.000; k_safe/k_oracle median 0.985 [10%-90%: 0.916-1.039] -> NOT MET
+R4 ar1: S0 only: share(DD ok) = 0.000, median 0.4734; k_S0/k_oracle median 2.093
+R4 ar1: binding {'SC:ruin': 200}
+R4 ar1: P8a acceptance 200/19424 = 0.0103; mean validation daily Sharpe of accepted histories 0.1319
+R4 garch: share(true P(DD>20%) <= 5%) = 0.975, median 0.0312, 90th pct 0.0435; share(ruin ok) = 1.000; k_safe/k_oracle median 0.920 [10%-90%: 0.853-0.976] -> OK
+R4 garch: S0 only: share(DD ok) = 0.000, median 0.3950; k_S0/k_oracle median 1.873
+R4 garch: binding {'SC:ruin': 200}
+R4 garch: P8a acceptance 200/25162 = 0.0079; mean validation daily Sharpe of accepted histories 0.1089
+R4 iid: share(true P(DD>20%) <= 5%) = 0.995, median 0.0274, 90th pct 0.0358; share(ruin ok) = 1.000; k_safe/k_oracle median 0.904 [10%-90%: 0.869-0.943] -> OK
+R4 iid: S0 only: share(DD ok) = 0.000, median 0.3950; k_S0/k_oracle median 1.855
+R4 iid: binding {'SC:ruin': 200}
+R4 iid: P8a acceptance 200/24427 = 0.0082; mean validation daily Sharpe of accepted histories 0.1087
+
+# diagnostic after R4 (scratch script, 100 accepted histories): is the autocorrelation of P8a-accepted AR(1) histories lower?
+validation lag-1 autocorrelation (true 0.2): P8a-accepted histories mean 0.191, all histories mean 0.197
+
+# R5 (ADDED AFTER seeing R4; information for decision Q7, not an acceptance test): P9_S63=1 uv run python docs/research/p9_simulations/risk_sim2.py r4:iid|garch|ar1 r3b:D1..D6
+R5 R4 ar1: share(true P(DD>20%) <= 5%) = 1.000, median 0.0105, 90th pct 0.0163; share(ruin ok) = 1.000; k_safe/k_oracle median 0.791 [10%-90%: 0.739-0.836] -> OK
+R5 R4 ar1: S0 only: share(DD ok) = 0.000, median 0.4734; k_S0/k_oracle median 2.093
+R5 R4 ar1: binding {'S63:dd': 200}
+R5 R4 ar1: P8a acceptance 200/19424 = 0.0103; mean validation daily Sharpe of accepted histories 0.1319
+R5 R4 garch: share(true P(DD>20%) <= 5%) = 1.000, median 0.0068, 90th pct 0.0113; share(ruin ok) = 1.000; k_safe/k_oracle median 0.746 [10%-90%: 0.700-0.794] -> OK
+R5 R4 garch: S0 only: share(DD ok) = 0.000, median 0.3950; k_S0/k_oracle median 1.873
+R5 R4 garch: binding {'S63:dd': 200}
+R5 R4 garch: P8a acceptance 200/25162 = 0.0079; mean validation daily Sharpe of accepted histories 0.1089
+R5 R4 iid: share(true P(DD>20%) <= 5%) = 1.000, median 0.0057, 90th pct 0.0079; share(ruin ok) = 1.000; k_safe/k_oracle median 0.739 [10%-90%: 0.717-0.767] -> OK
+R5 R4 iid: S0 only: share(DD ok) = 0.000, median 0.3950; k_S0/k_oracle median 1.855
+R5 R4 iid: binding {'S63:dd': 200}
+R5 R4 iid: P8a acceptance 200/24427 = 0.0082; mean validation daily Sharpe of accepted histories 0.1087
+R5 R3b D1: share(true P(DD>20%) <= 5%) = 1.000, median 0.0001, 90th pct 0.0002; share(ruin ok) = 1.000; k_safe/k_oracle median 0.454 [10%-90%: 0.438-0.471] -> OK
+R5 R3b D1: S0 only: share(DD ok) = 0.580, median 0.0431; k_S0/k_oracle median 0.967
+R5 R3b D1: binding {'S63:dd': 200}
+R5 R3b D2: share(true P(DD>20%) <= 5%) = 1.000, median 0.0003, 90th pct 0.0005; share(ruin ok) = 1.000; k_safe/k_oracle median 0.461 [10%-90%: 0.431-0.486] -> OK
+R5 R3b D2: S0 only: share(DD ok) = 0.560, median 0.0443; k_S0/k_oracle median 0.972
+R5 R3b D2: binding {'S63:dd': 200}
+R5 R3b D3: share(true P(DD>20%) <= 5%) = 1.000, median 0.0001, 90th pct 0.0004; share(ruin ok) = 1.000; k_safe/k_oracle median 0.464 [10%-90%: 0.433-0.493] -> OK
+R5 R3b D3: S0 only: share(DD ok) = 0.540, median 0.0453; k_S0/k_oracle median 0.977
+R5 R3b D3: binding {'S63:dd': 198, 'S3:dd': 2}
+R5 R3b D4: share(true P(DD>20%) <= 5%) = 1.000, median 0.0003, 90th pct 0.0008; share(ruin ok) = 1.000; k_safe/k_oracle median 0.520 [10%-90%: 0.485-0.552] -> OK
+R5 R3b D4: S0 only: share(DD ok) = 0.395, median 0.0688; k_S0/k_oracle median 1.074
+R5 R3b D4: binding {'S63:dd': 195, 'S3:dd': 4, 'S2:dd': 1}
+R5 R3b D5: share(true P(DD>20%) <= 5%) = 1.000, median 0.0146, 90th pct 0.0183; share(ruin ok) = 1.000; k_safe/k_oracle median 0.801 [10%-90%: 0.774-0.829] -> OK
+R5 R3b D5: S0 only: share(DD ok) = 0.000, median 0.3008; k_S0/k_oracle median 1.705
+R5 R3b D5: binding {'S63:dd': 200}
+R5 R3b D6: share(true P(DD>20%) <= 5%) = 1.000, median 0.0056, 90th pct 0.0078; share(ruin ok) = 1.000; k_safe/k_oracle median 0.737 [10%-90%: 0.710-0.767] -> OK
+R5 R3b D6: S0 only: share(DD ok) = 0.000, median 0.1941; k_S0/k_oracle median 1.388
+R5 R3b D6: binding {'S63:dd': 200}
