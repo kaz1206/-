@@ -13,8 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 8  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
-#                     6: P6 statistics; 7: P7 selection; 8: P8a validation
+SCHEMA_VERSION = 9  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
+#                     6: P6 statistics; 7: P7 selection; 8: P8a validation; 9: P8b OOS
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -44,6 +44,10 @@ _APPEND_ONLY = (
     "validation_run",
     "period_exposure",
     "validation_access_log",
+    "oos_manifest",
+    "holdout_state",
+    "oos_run",
+    "oos_access_log",
 )
 
 _DDL = """
@@ -298,7 +302,8 @@ CREATE TABLE IF NOT EXISTS evaluation (
     created_at TEXT NOT NULL,
     robust_id TEXT,
     stat_id TEXT,
-    plan_id TEXT
+    plan_id TEXT,
+    manifest_id TEXT
 );
 CREATE INDEX IF NOT EXISTS evaluation_candidate ON evaluation(candidate_id);
 
@@ -444,6 +449,48 @@ CREATE TABLE IF NOT EXISTS validation_access_log (
     accessed_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS oos_manifest (
+    manifest_id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL REFERENCES validation_plan(plan_id),
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    strategy_family TEXT NOT NULL,
+    candidates_json TEXT NOT NULL,
+    bands_json TEXT NOT NULL,
+    criteria_json TEXT NOT NULL,
+    partition_hash TEXT NOT NULL,
+    holdout_from TEXT NOT NULL,
+    holdout_to TEXT NOT NULL,
+    cost_json TEXT NOT NULL,
+    cost_hash TEXT NOT NULL,
+    rehearsal INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS holdout_state (
+    partition_hash TEXT NOT NULL,
+    state TEXT NOT NULL,
+    manifest_id TEXT NOT NULL,
+    changed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS oos_run (
+    manifest_id TEXT NOT NULL REFERENCES oos_manifest(manifest_id),
+    candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
+    attempt_no INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    run_id TEXT,
+    job_id TEXT,
+    message TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (manifest_id, candidate_id, attempt_no)
+);
+
+CREATE TABLE IF NOT EXISTS oos_access_log (
+    manifest_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    accessed_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS decision (
     decision_id TEXT PRIMARY KEY,
     candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
@@ -457,7 +504,8 @@ CREATE TABLE IF NOT EXISTS decision (
     filter_id TEXT REFERENCES filter_execution(filter_id),
     created_at TEXT NOT NULL,
     sel_id TEXT,
-    plan_id TEXT
+    plan_id TEXT,
+    manifest_id TEXT
 );
 CREATE INDEX IF NOT EXISTS decision_candidate ON decision(candidate_id);
 CREATE INDEX IF NOT EXISTS decision_filter ON decision(filter_id);
@@ -509,16 +557,20 @@ class Database:
             self.conn.execute("ALTER TABLE evaluation ADD COLUMN stat_id TEXT")
         if "plan_id" not in cols:  # v7 -> v8
             self.conn.execute("ALTER TABLE evaluation ADD COLUMN plan_id TEXT")
+        if "manifest_id" not in cols:  # v8 -> v9
+            self.conn.execute("ALTER TABLE evaluation ADD COLUMN manifest_id TEXT")
         dcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(decision)")}
         if "sel_id" not in dcols:  # v6 -> v7 adds one nullable column (existing rows unchanged)
             self.conn.execute("ALTER TABLE decision ADD COLUMN sel_id TEXT")
         if "plan_id" not in dcols:  # v7 -> v8
             self.conn.execute("ALTER TABLE decision ADD COLUMN plan_id TEXT")
+        if "manifest_id" not in dcols:  # v8 -> v9
+            self.conn.execute("ALTER TABLE decision ADD COLUMN manifest_id TEXT")
         with self.tx():
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
-            elif row["version"] in (1, 2, 3, 4, 5, 6, 7):
+            elif row["version"] in (1, 2, 3, 4, 5, 6, 7, 8):
                 # every step so far only adds tables (created above by the idempotent DDL)
                 self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:

@@ -3,6 +3,18 @@
 実装: `src/robustlab/metrics/engine.py`（純粋関数）、照合: `src/robustlab/metrics/compare.py`。
 定義を変えたら `METRIC_DEF_VERSION` を上げ、本書に新しい版の節を追加する（古い計算結果は消さない）。
 
+## OOS（P8b、p8b1＋band1、C74〜C76）
+
+**一度きり。PASS は事前の基準に反証されなかったという意味で、エッジの証明ではない。FAIL はエッジ消失の証明ではない（勝者の呪いの偏りもありうる）。**
+
+| 項目 | 定義 |
+|---|---|
+| 期間 | partition の Holdout [holdout_from, holdout_to + 1 日)。単一テスト 1 本（初期資金から） |
+| 予測帯（ロック時に固定） | P8a の検証期間の evidence から: V = 1 − γ₃SR + (γ₄−1)/4·SR²、n_eff = min(n, n_AR1, n_NW)、se_val = max(√(V/(n_eff−1)), SE_boot)、n_eff* = V/se_val² + 1、se_oos = √(V/(n_oos·n_eff*/n − 1))（n_oos = Holdout の平日数）、下限 = SR_val − 1.6449·√(se_val² + se_oos²) |
+| ゲート | `OOS_BELOW_PREDICTION_BAND`（OOS の日次 Sharpe < 下限）、`OOS_LOSS`（純損益 ≤ 0）、`OOS_RUIN`、`OOS_COST_FRAGILE`（P8a と同じ追加コストを引いて ≤ 0） |
+| 記録のみ | OOS だけの p 値（P8a と同じ方式、シード = sha256(manifest_id｜candidate_id) の先頭 8 桁） |
+| 既知の限界 | 予測帯の中心は P8a の合格者の検証期間の Sharpe なので上振れしている（勝者の呪い）。シミュレーションした条件では、続いている本物のエッジでも中くらいのエッジで 8〜14% が予測帯を下回った（実際の EA の誤判定率ではない）。AR(2) 型の依存では予測帯が狭すぎる |
+
 ## 複数期間検証（P8a、p8a1＋ev1、C71〜C73）
 
 **検証期間（選抜に使っていない期間）の単一テストで、パラメータは固定。合否だけを出し、順位はつけない。統計ゲートの不合格は「証拠不足」で、エッジがないという意味ではない。**

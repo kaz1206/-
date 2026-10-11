@@ -1,0 +1,5 @@
+# PRACTICE ONLY (P8B_PLAN §4): validation plan of the rehearsal workspace (diagnostic mode).
+label: rehearsal_v0
+strategy_file: ../strategies/rl_smoketest.yaml
+periods:
+  - {name: V0, from: 2018-01-02, to: 2018-06-15}

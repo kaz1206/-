@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複数期間検証）も完了（実機は診断モードで確認）。次は P8b（OOS）の計画。
+P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複数期間検証）も完了（実機は診断モードで確認）。P8b（OOS）は実装済み・Linux の全テスト合格で、練習用ワークスペースでの実機確認待ち。**本番の Holdout は練習で一度きりの実行・封印・再実行の拒否を確認するまで使わない。**
 
 ## 主要ドキュメント
 
@@ -9,7 +9,8 @@ P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
-- P8 計画（P8a 完了、C71〜C73。P8b は未着手）: `docs/plans/P8_PLAN.md`、検証計画: `configs/validation_plans/`、追加コスト: `configs/cost_stress.yaml`
+- P8b 計画（承認済み・実装済み、C74〜C76）: `docs/plans/P8B_PLAN.md`、練習用の設定: `configs/rehearsal/`
+- P8 計画（P8a 完了、C71〜C73）: `docs/plans/P8_PLAN.md`、検証計画: `configs/validation_plans/`、追加コスト: `configs/cost_stress.yaml`
 - P7 計画（完了、C68〜C70）: `docs/plans/P7_PLAN.md`、検証結果: `docs/research/p7_validation/RESULTS.md`、プロファイル: `configs/selection_profiles.yaml`
 - P6 計画（完了、C61〜C67）: `docs/plans/P6_PLAN.md`、検証結果: `docs/research/p6_validation/RESULTS.md`
 - P5 計画（完了、C56〜C60）: `docs/plans/P5_PLAN.md`
@@ -52,6 +53,7 @@ P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複
 - P8 の OOS 検証では、期間の事前固定・結果閲覧後のパラメータ変更による汚染管理（`HOLDOUT_CONTAMINATED`）・再試行の記録を徹底する。P10 は実際の EA の構造を反映した帰無仮説で行い、前提・限界・偶然の合格率を記録する。
 - 事前登録した合格基準は結果を見た後に緩めない。未達は未達として記録する。
 - P8a: 検証計画は実行前にロックし、変更は新しい計画（`VALIDATION_REVISED`）。結果を見た期間は露出台帳に残り、それより後に作ったラウンドの検証には使えない。統計ゲートの不合格は「証拠不足」でエッジなしではない。診断モードの結果は判定に使わない。
+- P8b: マニフェストはワークスペースに 1 つ、実行は一度きりで最初のジョブ前に Holdout を燃やす。OOS の PASS は「事前の基準に反証されなかった」、FAIL は「エッジ消失の証明ではない」。シミュレーションの数字は実際の EA の誤判定率ではない。
 - P7 で選ばれたことはエッジの証拠ではない（エッジなしの合成データでも 73% の回で何かが選ばれる）。P7 は P8・P10 に進める候補を絞る段階。P7 の判定は `filter_id` を空にして `sel_id` で結ぶ。
 
 ## 実行環境メモ
@@ -70,6 +72,7 @@ P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複
 - CLI（P4）: `rlab filter run <round_id> --profile <name>` / `rlab filter show <filter_id>` / `rlab why-not <candidate_id> [--filter <filter_id>]`
 - CLI（P7）: `rlab select run <round_id> --filter <fl> --robust <rb> --stats <st> [--profile default]` / `rlab select show <sel_id> [--candidate <cd>]`
 - CLI（P8a）: `rlab validate lock <sel_id> --plan <yaml> [--diagnostic --candidate <cd>]` / `rlab validate run <plan_id>` / `rlab validate show <plan_id> [--candidate <cd>]`（閲覧は記録される）
+- CLI（P8b）: `rlab oos lock <plan_id> [--rehearsal --candidate <cd>]` / `rlab oos run <manifest_id> --i-understand-this-is-final` / `rlab oos show <manifest_id>`（練習は `--workspace workspace_rehearsal --partition configs/rehearsal/data_partition.yaml`）
 - CLI（P5）: `rlab robust run <round_id> --filter <filter_id>` / `rlab robust show <robust_id> [--candidate <cd>]` / `rlab robust map <robust_id> [--metric score|robust]`
 - 終了コード: 0 成功、1 設定・入力エラー、2 実行時の失敗、3 Holdout Guard による拒否
 

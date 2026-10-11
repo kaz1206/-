@@ -18,6 +18,14 @@ from robustlab.storage.db import Database, now_iso
 
 
 @dataclass(frozen=True)
+class OosAccess:
+    """The only way to open the holdout (P8b, P8B_PLAN §3): one locked manifest, its candidates, the exact period."""
+
+    manifest_id: str
+    candidates: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class GuardDecision:
     approved: bool
     reason: str
@@ -77,4 +85,31 @@ def evaluate(
                 "reason": decision.reason,
             },
         )
+    return decision
+
+
+def evaluate_oos(db: Database, *, request_hash: str, from_date: dt.date, to_date: dt.date, partition: DataPartition,
+                 partition_hash: str, access: OosAccess) -> GuardDecision:
+    """Approve a single test on the holdout only for a locked manifest whose holdout this workspace has burned for
+    it, and only for exactly [holdout_from, holdout_to + 1 day). Every decision is logged."""
+    with db.tx():
+        reg = db.one("SELECT partition_hash FROM partition_registry WHERE id = 1")
+        man = db.one("SELECT partition_hash FROM oos_manifest WHERE manifest_id = ?", (access.manifest_id,))
+        burned = db.one("SELECT manifest_id FROM holdout_state WHERE partition_hash = ? AND state = 'BURNED' "
+                        "ORDER BY changed_at LIMIT 1", (partition_hash,))
+        want = (partition.holdout_from, partition.holdout_to + dt.timedelta(days=1))
+        if reg is None or reg["partition_hash"] != partition_hash:
+            decision = GuardDecision(False, "OOS_REJECTED: the partition is not the one pinned in this workspace")
+        elif man is None or man["partition_hash"] != partition_hash:
+            decision = GuardDecision(False, f"OOS_REJECTED: no locked manifest {access.manifest_id} for this partition")
+        elif burned is None or burned["manifest_id"] != access.manifest_id:
+            decision = GuardDecision(False, "OOS_REJECTED: the holdout is not burned for this manifest")
+        elif (from_date, to_date) != want:
+            decision = GuardDecision(False, f"OOS_REJECTED: the period must be exactly {want[0]}..{want[1]} (exclusive)")
+        else:
+            decision = GuardDecision(True, f"OOS: manifest {access.manifest_id}")
+        db.insert("holdout_access_log", {
+            "requested_at": now_iso(), "request_hash": request_hash, "from_date": from_date.isoformat(),
+            "to_date": to_date.isoformat(), "partition_hash": partition_hash, "approved": int(decision.approved),
+            "reason": decision.reason})
     return decision

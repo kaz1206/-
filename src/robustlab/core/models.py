@@ -372,6 +372,7 @@ class DataPartition(_Strict):
     holdout_to: dt.date
     embargo_days: int
     note: str = ""
+    rehearsal: bool = False  # P8b: a throw-away workspace for practising the one-shot OOS (P8B_PLAN §4)
 
     @model_validator(mode="after")
     def _valid(self) -> DataPartition:

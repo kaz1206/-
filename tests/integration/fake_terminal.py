@@ -210,7 +210,12 @@ def synth_single(data_dir: Path, common: Path, kv: dict[str, str], params: dict[
         if os.environ.get("FAKE_OPT_EDGE"):
             profit, trades = round(profit * 40, 2), 40 + int(fast) % 7
     if start.isoformat() != os.environ.get("FAKE_DISCOVERY_FROM"):
-        profit = round(profit * float(os.environ.get("FAKE_VAL_SCALE", "1")), 2)
+        scale = dict(kv_.split("=") for kv_ in os.environ.get("FAKE_SCALE_MAP", "").split(",") if kv_)
+        profit = round(profit * float(scale.get(start.isoformat(), os.environ.get("FAKE_VAL_SCALE", "1"))), 2)
+        tmul = dict(kv_.split("=") for kv_ in os.environ.get("FAKE_TRADES_MAP", "").split(",") if kv_)
+        if start.isoformat() in tmul:  # more trades over a longer period (keeps the daily Sharpe comparable)
+            factor = int(tmul[start.isoformat()])
+            trades, profit = trades * factor, round(profit * factor, 2)
     days = [start + dt.timedelta(days=i) for i in range((end - start).days) if (start + dt.timedelta(days=i)).weekday() < 5]
     deposit = 10000.0
     lines = ["ticket,time,time_msc,type,entry,volume,price,profit,commission,swap,fee,symbol,magic,position_id,reason,"

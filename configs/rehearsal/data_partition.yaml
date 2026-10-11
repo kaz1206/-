@@ -1,0 +1,8 @@
+# PRACTICE ONLY (P8B_PLAN §4): the partition of the throw-away workspace `workspace_rehearsal/`.
+# Its holdout (2019-01-02..2019-06-28) does not touch the research periods (V0 starts 2020-01-01, the real holdout
+# is 2024-07-01..2026-06-30). Never use this file with the research workspace `workspace/`.
+holdout_from: 2019-01-02
+holdout_to: 2019-06-28
+embargo_days: 10
+rehearsal: true
+note: "rehearsal of the one-shot OOS; burning this holdout costs nothing"

@@ -153,6 +153,7 @@ def run_backtest(
     workspace_root: Path,
     *,
     rerun: bool = False,
+    oos: holdout_guard.OosAccess | None = None,
 ) -> Outcome:
     # 1. configuration
     try:
@@ -165,13 +166,13 @@ def run_backtest(
 
     ws = Workspace(workspace_root)
     try:
-        return _run(ws, cfg, partition, partition_hash, lr, normalized, rerun)
+        return _run(ws, cfg, partition, partition_hash, lr, normalized, rerun, oos)
     finally:
         ws.close()
 
 
 def _run(ws: Workspace, cfg: TerminalConfig, partition, partition_hash: str, lr: LoadedRequest,
-         normalized: dict, rerun: bool) -> Outcome:
+         normalized: dict, rerun: bool, oos: holdout_guard.OosAccess | None = None) -> Outcome:
     db, rq, st = ws.db, lr.request, lr.strategy
     sweep_abandoned(db)
 
@@ -181,13 +182,20 @@ def _run(ws: Workspace, cfg: TerminalConfig, partition, partition_hash: str, lr:
         return Outcome(EXIT_USER, "PREFLIGHT_FAILED", "; ".join(problems))
 
     # 3. Holdout Guard
-    decision = holdout_guard.evaluate(db, request_hash=lr.request_hash, from_date=rq.from_date,
-                                      to_date=rq.to_date, partition=partition, partition_hash=partition_hash)
+    if oos is None:
+        decision = holdout_guard.evaluate(db, request_hash=lr.request_hash, from_date=rq.from_date,
+                                          to_date=rq.to_date, partition=partition, partition_hash=partition_hash)
+    else:  # P8b: the holdout opens only for a locked, burned manifest (P8B_PLAN §3)
+        decision = holdout_guard.evaluate_oos(db, request_hash=lr.request_hash, from_date=rq.from_date,
+                                              to_date=rq.to_date, partition=partition, partition_hash=partition_hash,
+                                              access=oos)
     if not decision.approved:
         return Outcome(EXIT_GUARD, "GUARD_REJECTED", decision.reason)
 
     # 4. identities
     sv, cd, rn, settings = _register(db, lr, normalized, ex5, mq5, partition_hash, cfg.terminal_path)
+    if oos is not None and cd not in oos.candidates:
+        return Outcome(EXIT_GUARD, "GUARD_REJECTED", f"OOS_REJECTED: {cd} is not in manifest {oos.manifest_id}", rn)
 
     # 5. idempotency
     done = db.one("SELECT job_id FROM job WHERE run_id = ? AND status = 'SUCCEEDED' ORDER BY job_id DESC LIMIT 1", (rn,))

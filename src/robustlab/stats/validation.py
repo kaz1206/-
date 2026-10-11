@@ -115,3 +115,35 @@ def holm(pvalues: dict[str, float], alpha: float = ALPHA) -> dict[str, bool]:
         else:
             break
     return out
+
+
+BAND_VERSION = "band1"
+BAND_Z = 1.6448536269514722  # one-sided 95%
+
+
+def oos_band(e: dict[str, Any], n_oos: int) -> dict[str, Any]:
+    """Pre-registered OOS prediction band from the validation evidence only (P8B_PLAN §2.1, §2.4 fix1).
+
+    V = 1 - g3*SR + (g4 - 1)/4*SR^2, n_eff = min(n, n_AR1, n_NW) (per-period autocorrelation),
+    se_val = max(sqrt(V / (n_eff - 1)), bootstrap SE), n_eff* = V / se_val^2 + 1,
+    se_oos = sqrt(V / (n_oos * n_eff* / n - 1)), lower = SR_val - 1.645 * sqrt(se_val^2 + se_oos^2).
+    The band is centred on the validation Sharpe of candidates that PASSED P8a on that same data, so it is
+    biased upwards (winner's curse); see P8B_PLAN §2.3 C4 for the simulated consequences.
+    """
+    if e.get("reason") or e.get("sharpe") is None:
+        return {"version": BAND_VERSION, "lower": None, "reason": f"no validation evidence: {e.get('reason')}"}
+    sr, g3, g4, n = e["sharpe"], e["skewness"], e["kurtosis"], e["n"]
+    v = 1 - g3 * sr + (g4 - 1) / 4 * sr * sr
+    n_eff = min(n, e["n_ar1"], e["n_newey_west"])
+    if not (v > 0) or n_eff < 2:
+        return {"version": BAND_VERSION, "lower": None, "reason": "non-positive variance term or n_eff < 2"}
+    se_an = math.sqrt(v / (n_eff - 1))
+    se_val = max(se_an, e.get("bootstrap_se") or 0.0)
+    n_star = v / se_val ** 2 + 1
+    denom = n_oos * n_star / n - 1
+    if denom <= 0:
+        return {"version": BAND_VERSION, "lower": None, "reason": "OOS too short for the band"}
+    se_oos = math.sqrt(v / denom)
+    return {"version": BAND_VERSION, "lower": sr - BAND_Z * math.sqrt(se_val ** 2 + se_oos ** 2), "reason": None,
+            "center": sr, "v": v, "n": n, "n_eff": n_eff, "se_analytic": se_an, "se_bootstrap": e.get("bootstrap_se"),
+            "se_val": se_val, "n_eff_star": n_star, "n_oos": n_oos, "se_oos": se_oos, "z": BAND_Z}

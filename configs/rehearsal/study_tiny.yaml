@@ -1,0 +1,17 @@
+# PRACTICE ONLY (P8B_PLAN §4): a 3 x 3 grid for the rehearsal workspace. Discovery 2018-07-02..2018-12-14,
+# 10 days before the rehearsal holdout's embargo. Includes InpFastPeriod 12 / InpSlowPeriod 50 (the candidate
+# checked in P3 and P8a) so that the rehearsal can use it.
+study_id: rehearsal_tiny_v1
+strategy_file: ../strategies/rl_smoketest.yaml
+symbol: EURUSD
+timeframe: H1
+from_date: 2018-07-02
+to_date: 2018-12-14
+param_space:
+  InpFastPeriod: {start: 10, step: 2, stop: 14}
+  InpSlowPeriod: {start: 40, step: 10, stop: 60}
+fixed:
+  InpLots: 0.01
+tester: {model: REAL_TICKS, execution_delay_ms: 0, deposit: 10000, currency: USD, leverage: 100}
+max_passes_per_job: 600
+coverage_tolerance_days: 7

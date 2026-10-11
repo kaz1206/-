@@ -61,7 +61,10 @@ def load_partition(path: Path) -> tuple[DataPartition, str]:
     """Returns the partition and its hash (the hash pins the holdout definition, P1_PLAN §2.4-2)."""
     data = load_yaml(path)
     partition = _parse(DataPartition, path, data)
-    return partition, sha256_hex(canonical_json(partition.model_dump(mode="json")))
+    dump = partition.model_dump(mode="json")
+    if not partition.rehearsal:
+        dump.pop("rehearsal")  # keeps the hash of every partition pinned before P8b unchanged
+    return partition, sha256_hex(canonical_json(dump))
 
 
 @dataclass(frozen=True)

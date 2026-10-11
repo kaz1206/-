@@ -29,6 +29,8 @@ filter_app = typer.Typer(no_args_is_help=True, help="Initial filter: profiles, P
 app.add_typer(filter_app, name="filter")
 robust_app = typer.Typer(no_args_is_help=True, help="Robustness: neighbourhood statistics, regions (P5)")
 app.add_typer(robust_app, name="robust")
+oos_app = typer.Typer(no_args_is_help=True, help="P8b OOS: one manifest, one run, the holdout is burned")
+app.add_typer(oos_app, name="oos")
 validate_app = typer.Typer(no_args_is_help=True, help="P8a validation in new periods (fixed parameters)")
 app.add_typer(validate_app, name="validate")
 select_app = typer.Typer(no_args_is_help=True, help="Selection: gates, region representatives, budget (P7)")
@@ -902,6 +904,89 @@ def validate_show(plan_id: str, candidate: str | None = typer.Option(None, "--ca
         _emit(s, True)
     else:
         _print_validate_summary(s)
+
+
+def _print_oos_summary(s: dict) -> None:
+    for k in ("manifest_id", "plan_id", "round_id", "rehearsal", "holdout", "holdout_state", "burned_at", "locked_at"):
+        typer.echo(f"{k}: {s[k]}")
+    if s["rehearsal"]:
+        typer.echo("REHEARSAL: practice workspace; no decision is written")
+    typer.echo(f"candidates: {s['candidates']}")
+    typer.echo(f"criteria (fixed before the run): {s['criteria']}")
+    for r in s["runs"]:
+        typer.echo(f"  run {r['candidate_id']} attempt {r['attempt_no']} {r['status']} run={r['run_id']}")
+    typer.echo("results:")
+    for x in s["results"]:
+        typer.echo(f"  {x['candidate_id']}: band lower edge {x['band_lower']:.6g} (centre {x['band_center']:.6g})")
+        if "outcome" in x:
+            typer.echo(f"    {x['outcome']}  reasons={x['reasons'] or '-'}  OOS sharpe={x['oos_sharpe']}  "
+                       f"net={x['net_profit']}  after extra cost={x['net_after_cost']}  days={x['days']}  "
+                       f"trades={x['trades']}  p (recorded only)={x['p_value_recorded_only']}")
+            typer.echo(f"    meaning: {x['interpretation']}")
+    typer.echo(f"note: {s['simulation_note']}")
+    typer.echo(f"note: {s['reuse_warning']}")
+
+
+@oos_app.command("lock")
+def oos_lock(plan_id: str, partition: Path = typer.Option(Path("configs/data_partition.yaml"), "--partition"),
+             cost: Path = typer.Option(Path("configs/cost_stress.yaml"), "--cost"),
+             rehearsal: bool = typer.Option(False, "--rehearsal", help="Practice workspace only"),
+             candidate: str | None = typer.Option(None, "--candidate", help="Candidate for --rehearsal"),
+             workspace: Path = WORKSPACE) -> None:
+    from robustlab.oos.manifest import lock
+
+    if rehearsal != bool(candidate):
+        typer.echo("--rehearsal and --candidate go together", err=True)
+        raise typer.Exit(1)
+    out = lock(workspace, plan_id, partition, cost, candidate)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        _print_oos_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@oos_app.command("run")
+def oos_run(manifest_id: str, confirm: bool = typer.Option(False, "--i-understand-this-is-final",
+                                                         help="Run the OOS once and burn the holdout"),
+            terminal: Path = typer.Option(Path("configs/terminal.yaml"), "--terminal"),
+            partition: Path = typer.Option(Path("configs/data_partition.yaml"), "--partition"),
+            workspace: Path = WORKSPACE) -> None:
+    from robustlab.oos.manifest import log_access, run
+
+    out = run(workspace, manifest_id, terminal, partition, confirm)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        db = _open(workspace)
+        try:
+            log_access(db, manifest_id, "run")
+        finally:
+            db.close()
+        _print_oos_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@oos_app.command("show")
+def oos_show(manifest_id: str, workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.oos.manifest import OosError, log_access, summarize
+
+    db = _open(workspace)
+    try:
+        try:
+            s = summarize(db, manifest_id)
+        except OosError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+        log_access(db, manifest_id, "show")
+    finally:
+        db.close()
+    if as_json:
+        _emit(s, True)
+    else:
+        _print_oos_summary(s)
 
 
 if __name__ == "__main__":  # pragma: no cover
