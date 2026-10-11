@@ -1,0 +1,7 @@
+# P8a validation plan for the RL_SmokeTest round (P8_PLAN §2-§3, approved 2026-10-11).
+# Locked with `rlab validate lock` before any validation job; a locked plan is never edited (a new plan is a revision).
+label: rl_smoketest_v1
+strategy_file: ../strategies/rl_smoketest.yaml
+periods:
+  - {name: V0, from: 2020-01-01, to: 2021-12-24}
+  - {name: V1, from: 2024-01-11, to: 2024-06-20}

@@ -1102,7 +1102,7 @@ rlab ledger  <strategy_family>            # 試行回数台帳
 | **P5 ロバストネス** | 近傍統計・Robust Score・Region・サブ期間（C56〜C59）。コストストレス・利益集中は P8 へ（C60）。詳細は [plans/P5_PLAN.md](plans/P5_PLAN.md) | 合成データで孤立ピークを選ばないことを確認 |
 | **P6 統計** | PSR / DSR / Bootstrap CI（C61〜C67。DSR は警告・順位づけのみ、C62）。詳細は [plans/P6_PLAN.md](plans/P6_PLAN.md) | 論文数値例と一致（完了 2026-10-11。検証は `docs/research/p6_validation/RESULTS.md`） |
 | **P7 選択** | `region_pareto_v1` の 1 種類（ゲート → 領域代表 → パレートの層＋順位の平均 → 予算 5）。C68〜C70。詳細は [plans/P7_PLAN.md](plans/P7_PLAN.md) | 決定性（同入力で同出力）・予算遵守。エッジなしでの選抜率を重要指標として記録（完了 2026-10-11。`docs/research/p7_validation/RESULTS.md`） |
-| **P8 検証と OOS** | 複数期間検証、OOS マニフェスト・予測帯・一度きり実行。**拘束条件（P6 承認時）**: 期間の事前固定、結果閲覧後のパラメータ変更による汚染管理（`HOLDOUT_CONTAMINATED`）、再試行の記録。P6 の評価値（`DISCOVERY_IN_SAMPLE`）を OOS の結果として読まない | 2 回目の OOS 実行が拒否される。`trace` で全経路表示 |
+| **P8 検証と OOS** | P8a（複数期間検証、C71〜C73。統計ゲート＝期間別に集約した保守的な PSR(0)＋Holm 法、銘柄ごとの追加コスト、計画のロック・露出台帳）を先に実装し、P8b（OOS）は別計画。詳細は [plans/P8_PLAN.md](plans/P8_PLAN.md)。複数期間検証、OOS マニフェスト・予測帯・一度きり実行。**拘束条件（P6 承認時）**: 期間の事前固定、結果閲覧後のパラメータ変更による汚染管理（`HOLDOUT_CONTAMINATED`）、再試行の記録。P6 の評価値（`DISCOVERY_IN_SAMPLE`）を OOS の結果として読まない | 2 回目の OOS 実行が拒否される。`trace` で全経路表示 |
 | **P9 リスクと配分** | Risk MC、fixed / dd_constrained / fractional_kelly、ロット変換 | binding_constraint が記録され、min lot 未満は INFEASIBLE |
 | **P10 帰無仮説テスト** | §19.3 のパイプライン偽陽性率測定（拘束条件（P6 承認時）: 実際の EA の構造を反映した帰無仮説で行い、シミュレーションの前提・限界・偶然の合格率を記録する） | 偽陽性率が許容範囲 ← **ここまでが MVP** |
 | P11 自動連結 | Pipeline Runner・Resume | 途中停止→再開で結果が一致 |

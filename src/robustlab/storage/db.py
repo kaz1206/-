@@ -13,8 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 7  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
-#                     6: P6 statistics; 7: P7 selection
+SCHEMA_VERSION = 8  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
+#                     6: P6 statistics; 7: P7 selection; 8: P8a validation
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -40,6 +40,10 @@ _APPEND_ONLY = (
     "parameter_region",
     "statistics_execution",
     "selection_execution",
+    "validation_plan",
+    "validation_run",
+    "period_exposure",
+    "validation_access_log",
 )
 
 _DDL = """
@@ -293,7 +297,8 @@ CREATE TABLE IF NOT EXISTS evaluation (
     filter_id TEXT REFERENCES filter_execution(filter_id),
     created_at TEXT NOT NULL,
     robust_id TEXT,
-    stat_id TEXT
+    stat_id TEXT,
+    plan_id TEXT
 );
 CREATE INDEX IF NOT EXISTS evaluation_candidate ON evaluation(candidate_id);
 
@@ -382,6 +387,63 @@ CREATE TABLE IF NOT EXISTS selection_execution (
 );
 CREATE INDEX IF NOT EXISTS selection_execution_round ON selection_execution(round_id);
 
+CREATE TABLE IF NOT EXISTS validation_plan (
+    plan_id TEXT PRIMARY KEY,
+    sel_id TEXT NOT NULL REFERENCES selection_execution(sel_id),
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    strategy_family TEXT NOT NULL,
+    label TEXT NOT NULL,
+    plan_json TEXT NOT NULL,
+    plan_hash TEXT NOT NULL,
+    strategy_path TEXT NOT NULL,
+    cost_json TEXT NOT NULL,
+    cost_hash TEXT NOT NULL,
+    constants_json TEXT NOT NULL,
+    candidates_json TEXT NOT NULL,
+    diagnostic INTEGER NOT NULL,
+    revision_no INTEGER NOT NULL,
+    exposure_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS validation_plan_sel ON validation_plan(sel_id);
+
+CREATE TABLE IF NOT EXISTS validation_run (
+    plan_id TEXT NOT NULL REFERENCES validation_plan(plan_id),
+    candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
+    period_name TEXT NOT NULL,
+    from_date TEXT NOT NULL,
+    to_date TEXT NOT NULL,
+    attempt_no INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    run_id TEXT,
+    job_id TEXT,
+    reused INTEGER NOT NULL,
+    job_created_at TEXT,
+    message TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (plan_id, candidate_id, period_name, attempt_no)
+);
+
+CREATE TABLE IF NOT EXISTS period_exposure (
+    strategy_family TEXT NOT NULL,
+    from_date TEXT NOT NULL,
+    to_date TEXT NOT NULL,
+    source TEXT NOT NULL,
+    plan_id TEXT,
+    candidate_id TEXT,
+    run_id TEXT,
+    seen_at TEXT NOT NULL,
+    recorded_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS period_exposure_family ON period_exposure(strategy_family);
+
+CREATE TABLE IF NOT EXISTS validation_access_log (
+    plan_id TEXT NOT NULL,
+    candidate_id TEXT,
+    action TEXT NOT NULL,
+    accessed_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS decision (
     decision_id TEXT PRIMARY KEY,
     candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
@@ -394,7 +456,8 @@ CREATE TABLE IF NOT EXISTS decision (
     details_json TEXT NOT NULL,
     filter_id TEXT REFERENCES filter_execution(filter_id),
     created_at TEXT NOT NULL,
-    sel_id TEXT
+    sel_id TEXT,
+    plan_id TEXT
 );
 CREATE INDEX IF NOT EXISTS decision_candidate ON decision(candidate_id);
 CREATE INDEX IF NOT EXISTS decision_filter ON decision(filter_id);
@@ -444,14 +507,18 @@ class Database:
             self.conn.execute("ALTER TABLE evaluation ADD COLUMN robust_id TEXT")
         if "stat_id" not in cols:  # v5 -> v6 adds one nullable column (existing rows unchanged)
             self.conn.execute("ALTER TABLE evaluation ADD COLUMN stat_id TEXT")
+        if "plan_id" not in cols:  # v7 -> v8
+            self.conn.execute("ALTER TABLE evaluation ADD COLUMN plan_id TEXT")
         dcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(decision)")}
         if "sel_id" not in dcols:  # v6 -> v7 adds one nullable column (existing rows unchanged)
             self.conn.execute("ALTER TABLE decision ADD COLUMN sel_id TEXT")
+        if "plan_id" not in dcols:  # v7 -> v8
+            self.conn.execute("ALTER TABLE decision ADD COLUMN plan_id TEXT")
         with self.tx():
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
-            elif row["version"] in (1, 2, 3, 4, 5, 6):
+            elif row["version"] in (1, 2, 3, 4, 5, 6, 7):
                 # every step so far only adds tables (created above by the idempotent DDL)
                 self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:

@@ -3,6 +3,24 @@
 実装: `src/robustlab/metrics/engine.py`（純粋関数）、照合: `src/robustlab/metrics/compare.py`。
 定義を変えたら `METRIC_DEF_VERSION` を上げ、本書に新しい版の節を追加する（古い計算結果は消さない）。
 
+## 複数期間検証（P8a、p8a1＋ev1、C71〜C73）
+
+**検証期間（選抜に使っていない期間）の単一テストで、パラメータは固定。合否だけを出し、順位はつけない。統計ゲートの不合格は「証拠不足」で、エッジがないという意味ではない。**
+
+| 項目 | 定義 |
+|---|---|
+| 期間 | 検証計画（ロック済み）の各期間。期間ごとに初期資金 D から始まる別々の単一テスト |
+| 日次リターン | 期間 j ごとに r_{j,t} = (E_{j,t} − E_{j,t−1}) / D、E_{j,0} = D。境界をまたぐリターン・空白期間のゼロは作らない |
+| 標本 | 全期間の日次リターンを集めたもの（n = 日数の合計）。平均・標本標準偏差（ddof = 1）・Sharpe・歪度・尖度はこの標本から |
+| 自己相関 | ρ̂_k = Σ_j Σ_{t>k}(r_{j,t} − r̄)(r_{j,t−k} − r̄) ÷ Σ(r − r̄)²（期間内の組だけ） |
+| p 値 | p = 1 − min(PSR 標準, PSR AR(1) n*, PSR Newey-West n*, Φ(SR / SE_boot))、SR* = 0、片側。SE_boot は期間ごとの定常ブートストラップ（B = 2,000、シード = sha256(plan_id｜candidate_id) の先頭 8 桁）。標準の PSR が計算できない（n < 30、分散 0）なら p = 1 |
+| Holm 法 | 家族 = 同じ選抜でロックした全計画（診断を除く）の候補の和集合、K = その数。この計画に結果のない候補の p は 1。α = 0.05。p の小さい順（同値は candidate_id）に p₍ᵢ₎ ≤ α/(K−i+1) の間だけ有意 |
+| 再現性 | Discovery 期間の単一テストの純損益（差 ≤ 0.01）と取引数が P3 のパスと一致 |
+| 追加コスト | 決済の約定（OUT / INOUT / OUT_BY）ごとに 幅 ÷ tick_size × tick_value × 数量。幅は `configs/cost_stress.yaml`（EURUSD 0.00010、XAUUSD 0.30）。テスターの損益（スプレッド・手数料・スワップ・fee を含む）に上乗せ。p 値には使わない |
+| ゲート | `REPRODUCIBILITY_MISMATCH`、`VALIDATION_RUIN`（破産・ロスカット）、`VALIDATION_PERIOD_LOSS`（合計 ≤ 0）、`VALIDATION_INSUFFICIENT_EVIDENCE`（Holm で有意でない）、`COST_FRAGILE`（追加コスト後の合計 ≤ 0） |
+| 警告 | `VALIDATION_PERIOD_LOSS_SINGLE`、`PROFIT_CONCENTRATED`（上位 5 件を除いた決済の損益の合計 ≤ 0）、`SERIAL_DEPENDENCE_HIGH`、`VALIDATION_REVISED`、`SELECTION_REVISED`、`PRIOR_EXPOSURE` |
+| 既知の限界 | AR(2) 型の依存では p 値が小さく出すぎる（H1: P(p ≤ 0.01) = 2.5%）。家族の誤り率 8.95%（K = 5、相関 0.5） |
+
 ## 判定と選抜（P7、region_pareto_v1 s1、C68〜C70）
 
 **Discovery 期間の値だけで決める。選ばれたことはエッジの証拠ではない（エッジなしの合成データでも 73% の回で何かが選ばれる）。DSR は相対順位にだけ使う。**

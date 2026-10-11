@@ -1,0 +1,8 @@
+# Extra cost for COST_FRAGILE (P8_PLAN §4.3, approved 2026-10-11). A PRICE WIDTH per round trip, per symbol.
+# "pip" is not used on purpose (it means 10 points on 5-digit FX but 0.1 or 0.01 USD on XAUUSD depending on the broker).
+# Charged once per closing deal, in proportion to its volume, ON TOP of the tester result (which already contains
+# the spread, commission, swap and fee). Assumption: about one more typical spread; not measured at the broker.
+# A validation plan for a symbol that is not listed here is refused at lock time. The content hash is locked with the plan.
+symbols:
+  EURUSD: {extra_price_per_round_trip: 0.00010}   # 10 points at 5 digits (commonly "1 pip")
+  XAUUSD: {extra_price_per_round_trip: 0.30}      # 0.30 USD per ounce (30 points at 2 digits)

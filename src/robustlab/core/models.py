@@ -295,6 +295,55 @@ class SelectionProfileFile(_Strict):
     profiles: dict[str, SelectionProfile]
 
 
+class ValidationPeriod(_Strict):
+    name: str
+    from_date: dt.date = Field(alias="from")
+    to_date: dt.date = Field(alias="to", description="Exclusive end, as every period in this platform")
+
+    @model_validator(mode="after")
+    def _valid(self) -> ValidationPeriod:
+        if self.from_date >= self.to_date:
+            raise ValueError(f"period {self.name}: from must be before to")
+        if self.name.upper() == "DISCOVERY":
+            raise ValueError("DISCOVERY is reserved for the reproducibility run")
+        return self
+
+
+class ValidationPlanSpec(_Strict):
+    """P8a validation plan (P8_PLAN §3). Locked with a hash before any validation job; never edited."""
+
+    label: str
+    strategy_file: str = Field(description="Strategy YAML of the round, relative to the plan file")
+    periods: list[ValidationPeriod]
+
+    @model_validator(mode="after")
+    def _valid(self) -> ValidationPlanSpec:
+        if not self.periods:
+            raise ValueError("at least one validation period is needed")
+        names = [p.name for p in self.periods]
+        if len(set(names)) != len(names):
+            raise ValueError("period names must be unique")
+        ps = sorted(self.periods, key=lambda p: p.from_date)
+        for a, b in zip(ps, ps[1:], strict=False):
+            if b.from_date < a.to_date:
+                raise ValueError(f"periods {a.name} and {b.name} overlap")
+        return self
+
+
+class CostStressSymbol(_Strict):
+    extra_price_per_round_trip: float
+
+    @model_validator(mode="after")
+    def _valid(self) -> CostStressSymbol:
+        if not self.extra_price_per_round_trip > 0:
+            raise ValueError("extra_price_per_round_trip must be > 0")
+        return self
+
+
+class CostStressFile(_Strict):
+    symbols: dict[str, CostStressSymbol]
+
+
 class TerminalConfig(_Strict):
     terminal_path: Path = Field(description="Portable terminal64.exe")
     data_dir: Path | None = Field(default=None, description="Data folder; defaults to the terminal folder (portable)")

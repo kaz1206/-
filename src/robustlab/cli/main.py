@@ -29,6 +29,8 @@ filter_app = typer.Typer(no_args_is_help=True, help="Initial filter: profiles, P
 app.add_typer(filter_app, name="filter")
 robust_app = typer.Typer(no_args_is_help=True, help="Robustness: neighbourhood statistics, regions (P5)")
 app.add_typer(robust_app, name="robust")
+validate_app = typer.Typer(no_args_is_help=True, help="P8a validation in new periods (fixed parameters)")
+app.add_typer(validate_app, name="validate")
 select_app = typer.Typer(no_args_is_help=True, help="Selection: gates, region representatives, budget (P7)")
 app.add_typer(select_app, name="select")
 stats_app = typer.Typer(no_args_is_help=True, help="Statistics: DSR, block-bootstrap intervals (P6, in-sample)")
@@ -799,6 +801,107 @@ def select_show(sel_id: str, candidate: str | None = typer.Option(None, "--candi
         _emit(s, True)
     else:
         _print_select_summary(s)
+
+
+def _print_validate_summary(s: dict) -> None:
+    for k in ("plan_id", "sel_id", "round_id", "label", "diagnostic", "revision_no", "locked_at"):
+        typer.echo(f"{k}: {s[k]}")
+    if s["diagnostic"]:
+        typer.echo("DIAGNOSTIC: checks the machinery only; no decision is written and nothing here is a pass/fail")
+    typer.echo("periods: " + ", ".join(f"{p['name']} [{p['from']}, {p['to']})" for p in s["periods"]))
+    typer.echo(f"candidates: {s['candidates']}")
+    typer.echo(f"gate settings: {s['constants']}  extra cost (price width per round trip): {s['cost']['symbols']}")
+    typer.echo(f"plans that have seen each period: {s['plans_that_saw_each_period']}  "
+               f"exposure before lock: {len(s['exposure_before_lock'])}")
+    typer.echo("runs:")
+    for r in s["runs"]:
+        typer.echo(f"  {r['candidate_id']} {r['period_name']:<9} attempt {r['attempt_no']} {r['status']}"
+                   f"{' (reused existing result)' if r['reused'] else ''} run={r['run_id']}")
+    typer.echo("results:")
+    for x in s["results"]:
+        if "outcome" not in x:
+            typer.echo(f"  {x['candidate_id']}: not evaluated yet")
+            continue
+        typer.echo(f"  {x['candidate_id']}: {x['outcome']}  reasons={x['reasons'] or '-'}")
+        typer.echo(f"    p={x['p_value']:.6g} (PSR: {x['psr']}, n={x['n_days']} days)  pooled net={x['pooled_net_profit']}"
+                   f"  after extra cost={x['net_after_cost_1x']}")
+        typer.echo(f"    reproducibility: {x['reproducibility']}")
+        for n, p in x["periods"].items():
+            typer.echo(f"    {n}: net={p['net_profit']} trades={p['trades']} days={p['days']} sharpe={p['sharpe']} "
+                       f"observed spread={p['observed_spread_points']} points")
+        if "VALIDATION_INSUFFICIENT_EVIDENCE" in x["reasons"]:
+            typer.echo(f"    note: {s['insufficient_evidence_text']}")
+    typer.echo(f"known limitation: {s['known_limitation']}")
+
+
+@validate_app.command("lock")
+def validate_lock(sel_id: str, plan: Path = typer.Option(..., "--plan", exists=True, dir_okay=False),
+                  cost: Path = typer.Option(Path("configs/cost_stress.yaml"), "--cost"),
+                  partition: Path = typer.Option(Path("configs/data_partition.yaml"), "--partition"),
+                  diagnostic: bool = typer.Option(False, "--diagnostic", help="Check the machinery, no decision"),
+                  candidate: str | None = typer.Option(None, "--candidate", help="Candidate for --diagnostic"),
+                  workspace: Path = WORKSPACE) -> None:
+    from robustlab.validation.run import lock
+
+    if diagnostic != bool(candidate):
+        typer.echo("--diagnostic and --candidate go together", err=True)
+        raise typer.Exit(1)
+    out = lock(workspace, sel_id, plan, cost, partition, candidate)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        _print_validate_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@validate_app.command("run")
+def validate_run(plan_id: str, terminal: Path = typer.Option(Path("configs/terminal.yaml"), "--terminal"),
+                 partition: Path = typer.Option(Path("configs/data_partition.yaml"), "--partition"),
+                 workspace: Path = WORKSPACE) -> None:
+    from robustlab.validation.run import log_access, run
+
+    out = run(workspace, plan_id, terminal, partition)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        db = _open(workspace)
+        try:
+            log_access(db, plan_id, None, "run")
+        finally:
+            db.close()
+        _print_validate_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@validate_app.command("show")
+def validate_show(plan_id: str, candidate: str | None = typer.Option(None, "--candidate"),
+                  workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.validation.run import ValidateError, log_access, summarize
+
+    db = _open(workspace)
+    try:
+        try:
+            s = summarize(db, plan_id)
+        except ValidateError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+        log_access(db, plan_id, candidate, "show")  # P8_PLAN §5: every look at the results is recorded
+        if candidate:
+            row = db.one("SELECT values_json FROM evaluation WHERE plan_id = ? AND candidate_id = ?",
+                         (plan_id, candidate))
+            if row is None:
+                typer.echo(f"no validation values for {candidate} in {plan_id}", err=True)
+                raise typer.Exit(1)
+            _emit(json.loads(row["values_json"]), True)
+            return
+    finally:
+        db.close()
+    if as_json:
+        _emit(s, True)
+    else:
+        _print_validate_summary(s)
 
 
 if __name__ == "__main__":  # pragma: no cover

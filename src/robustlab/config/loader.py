@@ -14,8 +14,10 @@ from robustlab.core.models import (
     BacktestRequest,
     DataPartition,
     ProfileFile,
+    CostStressFile,
     SelectionProfile,
     SelectionProfileFile,
+    ValidationPlanSpec,
     StrategyProfile,
     StrategySpec,
     StudyRequest,
@@ -105,6 +107,18 @@ def load_selection_profile(path: Path, name: str) -> tuple[SelectionProfile, str
         raise ConfigError(f"{path}: unknown selection profile {name!r} (have {sorted(pf.profiles)})")
     prof = pf.profiles[name]
     return prof, sha256_hex(canonical_json({"name": name, **prof.model_dump(mode="json")}))
+
+
+def load_validation_plan(path: Path) -> tuple[ValidationPlanSpec, Path, str]:
+    """(plan, resolved strategy path, hash of the plan content) - P8_PLAN §3."""
+    plan = _parse(ValidationPlanSpec, path, load_yaml(path))
+    strategy_path = (path.parent / plan.strategy_file).resolve()
+    return plan, strategy_path, sha256_hex(canonical_json(plan.model_dump(mode="json", by_alias=True)))
+
+
+def load_cost_stress(path: Path) -> tuple[CostStressFile, str]:
+    cs = _parse(CostStressFile, path, load_yaml(path))
+    return cs, sha256_hex(canonical_json(cs.model_dump(mode="json")))
 
 
 def load_profile(path: Path, name: str) -> tuple[StrategyProfile, str]:

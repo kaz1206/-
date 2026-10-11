@@ -194,6 +194,60 @@ def optimize(data_dir: Path, common: Path, kv: dict[str, str], params: dict[str,
     return 0
 
 
+def synth_single(data_dir: Path, common: Path, kv: dict[str, str], params: dict[str, str], job_id: str,
+                 build: int) -> int:
+    """P8: a single test whose result follows the optimization fake (same profit and trades as the pass on the
+    Discovery period; FAKE_VAL_SCALE times the profit on other periods), with one deal pair per trade."""
+    start = dt.datetime.strptime(kv["FromDate"], "%Y.%m.%d").date()
+    end = dt.datetime.strptime(kv["ToDate"], "%Y.%m.%d").date()
+    fast, slow = float(params["InpFastPeriod"].split("|")[0]), float(params["InpSlowPeriod"].split("|")[0])
+    mode = os.environ["FAKE_SINGLE_SYNTH"]
+    if mode == "mixed" and fast >= slow:
+        profit, trades = 0.0, 0
+    else:
+        profit = round((fast - slow / 4) * 0.37, 2)
+        trades = 10 + int(fast) % 7
+        if os.environ.get("FAKE_OPT_EDGE"):
+            profit, trades = round(profit * 40, 2), 40 + int(fast) % 7
+    if start.isoformat() != os.environ.get("FAKE_DISCOVERY_FROM"):
+        profit = round(profit * float(os.environ.get("FAKE_VAL_SCALE", "1")), 2)
+    days = [start + dt.timedelta(days=i) for i in range((end - start).days) if (start + dt.timedelta(days=i)).weekday() < 5]
+    deposit = 10000.0
+    lines = ["ticket,time,time_msc,type,entry,volume,price,profit,commission,swap,fee,symbol,magic,position_id,reason,"
+             "comment", f"1,{start:%Y.%m.%d} 00:00:00,0,2,0,0.00,0.00000,{deposit:.2f},0.00,0.00,0.00,,0,0,0,\"\""]
+    base = profit / trades if trades else 0.0
+    pnl = [round(base + (2.0 if i % 2 == 0 else -2.0), 2) for i in range(trades)]
+    if trades:
+        pnl[-1] = round(profit - sum(pnl[:-1]), 2)
+    by_day: dict[dt.date, float] = {}
+    t = 2
+    for i, p in enumerate(pnl):
+        day = days[int(i * len(days) / trades)]
+        for entry, typ, pr in ((0, 0, 0.0), (1, 1, p)):
+            lines.append(f"{t},{day:%Y.%m.%d} {1 + entry:02d}:00:00,0,{typ},{entry},0.01,1.10000,{pr:.2f},0.00,0.00,0.00,"
+                         f"EURUSD,20261008,{i + 2},3,\"\"")
+            t += 1
+        by_day[day] = by_day.get(day, 0.0) + p
+    daily = ["date,balance_close,equity_close,equity_min,equity_max,positions_max,ticks"]
+    bal = deposit
+    for day in days:
+        bal += by_day.get(day, 0.0)
+        daily.append(f"{day:%Y.%m.%d},{bal:.2f},{bal:.2f},{bal - 1:.2f},{bal + 1:.2f},1,100")
+    gp = round(sum(x for x in pnl if x > 0), 2)
+    gl = round(sum(x for x in pnl if x < 0), 2)
+    stats = stats_values(profit=round(sum(pnl), 2), trades=float(trades), deals=float(2 * trades), gross_profit=gp,
+                         gross_loss=gl, profit_trades=float(sum(1 for x in pnl if x > 0)),
+                         loss_trades=float(sum(1 for x in pnl if x <= 0)))
+    version = os.environ.get("FAKE_TELEMETRY_VERSION", "3")
+    env = env_doc(job_id, terminal_build=build, telemetry_version=version, tracking=TRACKING,
+                  first_tick=f"{days[0]:%Y.%m.%d} 00:05:00", last_tick=f"{days[-1]:%Y.%m.%d} 22:00:00")
+    write_telemetry(common, job_id, deals_text="\n".join(lines) + "\n", stats=stats, version=version, env=env,
+                    daily_text="\n".join(daily) + "\n")
+    (data_dir / f"{kv['Report']}.htm").write_bytes(codecs.BOM_UTF16_LE + "<html>report</html>".encode("utf-16-le"))
+    log(data_dir, 'last test passed with result "successfully finished" in 0:00:00.216')
+    return 0
+
+
 def main() -> int:
     mode = os.environ.get("FAKE_MODE", "ok")
     data_dir = Path(sys.argv[0]).absolute().parent  # do not follow the test symlink
@@ -228,6 +282,8 @@ def main() -> int:
     log(data_dir, "automatic testing started")
     if kv.get("Optimization") == "1" and mode == "ok":
         return optimize(data_dir, common, kv, params, job_id, build)
+    if os.environ.get("FAKE_SINGLE_SYNTH") and mode == "ok":
+        return synth_single(data_dir, common, kv, params, job_id, build)
     if mode == "hang":
         time.sleep(3600)
         return 0
