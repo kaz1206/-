@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1〜P6 は完了（P6 まで実機・実データで確認合格）。P7（判定と選抜）は実装済み・Linux の全テスト合格で、実データでの動作確認待ち。
+P1〜P7 は完了（P7 まで実機・実データで確認合格）。次は P8（複数期間検証と OOS）の計画。
 
 ## 主要ドキュメント
 
@@ -9,7 +9,7 @@ P1〜P6 は完了（P6 まで実機・実データで確認合格）。P7（判�
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
-- P7 計画（承認済み・実装済み、C68〜C70）: `docs/plans/P7_PLAN.md`、検証結果: `docs/research/p7_validation/RESULTS.md`、プロファイル: `configs/selection_profiles.yaml`
+- P7 計画（完了、C68〜C70）: `docs/plans/P7_PLAN.md`、検証結果: `docs/research/p7_validation/RESULTS.md`、プロファイル: `configs/selection_profiles.yaml`
 - P6 計画（完了、C61〜C67）: `docs/plans/P6_PLAN.md`、検証結果: `docs/research/p6_validation/RESULTS.md`
 - P5 計画（完了、C56〜C60）: `docs/plans/P5_PLAN.md`
 - P4 計画（完了、C51〜C55）: `docs/plans/P4_PLAN.md`、PSR の入力定義: `docs/metrics_definitions.md`、プロファイル: `configs/strategy_profiles.yaml`
