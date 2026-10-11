@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2・指標の自前計算 MetricEngine m2）は完了（2026-10-10 実機確認合格）。P3（完全グリッド最適化・全パス取込・試行回数台帳）も完了（2026-10-11 実機 E2E 合格）。P4（初期フィルタ: 戦略プロファイル・PSR ゲート・全ゲート記録）も完了（2026-10-11）。P5（ロバストネス: 近傍統計・島・感度・年別一貫性）も完了（2026-10-11）。
+P1〜P5 は完了（P5 まで実機確認合格）。P6（DSR・ブートストラップ信頼区間）は実装済み・Linux の全テスト合格で、実データでの動作確認待ち。
 
 ## 主要ドキュメント
 
@@ -45,6 +45,10 @@ P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2
 - 判定（Decision）には必ず理由コードと、使ったコンポーネント名・バージョンを記録する。
 - 試行回数は捨てた試行も含めて `trial_ledger` に記録する。
 - 乱数を使う処理はシードを記録する。
+- DSR と各種補正値は警告・順位づけにだけ使い、単独で合否を決めない（C62）。P6 の値はすべて `DISCOVERY_IN_SAMPLE` で、OOS の証拠として扱わない。
+- 偶然の合格率が基準を満たさない依存構造（AR(2) など）は既知の限界として結果に明示し、補正で安全性が保証されたとは扱わない。
+- P8 の OOS 検証では、期間の事前固定・結果閲覧後のパラメータ変更による汚染管理（`HOLDOUT_CONTAMINATED`）・再試行の記録を徹底する。P10 は実際の EA の構造を反映した帰無仮説で行い、前提・限界・偶然の合格率を記録する。
+- 事前登録した合格基準は結果を見た後に緩めない。未達は未達として記録する。
 
 ## 実行環境メモ
 
@@ -55,8 +59,9 @@ P1（単一バックテストの安全な実行と保存）と P2（Telemetry v2
 ## コマンド
 
 - 依存関係: `uv sync`（ロックファイル `uv.lock`。Python 3.12/3.13）
-- テスト: `uv run pytest`（Linux で全テストが動く。MT5 は偽の端末 `tests/integration/fake_terminal.py` で代替）
+- テスト: `uv run pytest`（Linux で全テストが動く。MT5 は偽の端末 `tests/integration/fake_terminal.py` で代替。P6 のモンテカルロ検証 `tests/validation/` を含めて 3〜4 分）
 - CLI: `uv run rlab backtest run <request.yaml> [--rerun]` / `rlab backtest show <run_id>` / `rlab jobs list` / `rlab metrics compute <job_id|--all>` / `rlab metrics show <run_id>`
+- CLI（P4〜P6）: `rlab filter run <round_id> --profile <name>` / `rlab why-not <candidate_id>` / `rlab robust run <round_id> --filter <filter_id>` / `rlab stats run <round_id> --filter <filter_id> [--candidate <cd>] [--reps 2000] [--seed N]` / `rlab stats show <stat_id> [--candidate <cd>]`
 - CLI（P3）: `rlab optimize run <study.yaml> [--rerun]` / `rlab optimize show <round_id>` / `rlab optimize pass <round_id> <candidate_id>` / `rlab trials show <strategy_family>`
 - CLI（P4）: `rlab filter run <round_id> --profile <name>` / `rlab filter show <filter_id>` / `rlab why-not <candidate_id> [--filter <filter_id>]`
 - CLI（P5）: `rlab robust run <round_id> --filter <filter_id>` / `rlab robust show <robust_id> [--candidate <cd>]` / `rlab robust map <robust_id> [--metric score|robust]`

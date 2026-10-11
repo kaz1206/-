@@ -102,7 +102,7 @@ def test_v3_database_with_p3_data_migrates_to_v4_unchanged(opt):
     con.close()
     db = Database(path)
     try:
-        assert db.one("SELECT version FROM schema_version")["version"] == 5
+        assert db.one("SELECT version FROM schema_version")["version"] == 6
         after = {t: [tuple(r) for r in db.all(f"SELECT * FROM {t} ORDER BY 1")] for t in tables}
     finally:
         db.close()

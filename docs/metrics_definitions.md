@@ -3,6 +3,35 @@
 実装: `src/robustlab/metrics/engine.py`（純粋関数）、照合: `src/robustlab/metrics/compare.py`。
 定義を変えたら `METRIC_DEF_VERSION` を上げ、本書に新しい版の節を追加する（古い計算結果は消さない）。
 
+## 統計評価（P6、dsr1 ＋ bs1、C61〜C67）
+
+**すべて `DISCOVERY_IN_SAMPLE`（候補を選んだ期間の内側の値）。OOS の証拠ではない。DSR は警告・順位づけのみに使い、単独で合否を決めない（C62）。**
+
+| 値 | 定義 |
+|---|---|
+| 入力のリターン | 日次 Parquet の日末エクイティから r_t = (E_t − E_{t−1}) / D、E_0 = D（C53。保存済みの `daily_sharpe` と一致することを毎回確認） |
+| N（ファミリー） | 同じ `strategy_family` の全ラウンドで、依頼したパラメータ空間を全展開した `candidate_id` の異なる数（失敗したパスも含む。再実行・重なるラウンドを二重に数えない） |
+| V[SR]（ファミリー） | 同じファミリーの成功したジョブの結果のうち、異なる（`candidate_id`・期間）の組で `score_status = OK` のものの `daily_sharpe` の標本分散（ddof = 1） |
+| 除外 | `BANKRUPTCY`・`STOP_OUT`・`NO_TRADES`・`NOT_COMPUTABLE` は Sharpe・DSR・区間を null と理由にし、V に入れず N には数える。件数を状態別に記録 |
+| SR₀ | √V · ((1 − γ)Φ⁻¹(1 − 1/N) + γΦ⁻¹(1 − 1/(N·e)))。N = 1 または V = 0 なら 0（理由を記録） |
+| `dsr` | PSR(SR₀)（P4 と同じ PSR の式、尖度の項あり） |
+| `dsr_ar1` | n を n* = n(1 − ρ̂₁)/(1 + ρ̂₁) に置き換えた PSR(SR₀)（ρ̂₁ > 0 のときのみ） |
+| `dsr_newey_west` | n を n / f に置き換えた PSR(SR₀)。f = 1 + 2Σ_{k≤L}(1 − k/(L+1))ρ̂_k、L = ⌊4(n/100)^{2/9}⌋（f > 1 のときのみ） |
+| `dsr_bootstrap_se` | Φ((SR − SR₀) / SE)。SE は定常ブートストラップの再標本 Sharpe の標準偏差（ブートストラップ対象の候補のみ） |
+| `dsr_conservative` | 計算できた上の値の最小値（使った値の名前を `dsr_conservative_components` に記録）（**独自拡張**） |
+| `dependence` | 自己相関 1〜5 次（標本平均を引いた系列の比）、n*、L、f（長期分散の比）。n/n* ≥ 1.5 で `SERIAL_DEPENDENCE_HIGH`（**独自拡張**の目安） |
+| `dsr_round_scope` | N・V をそのラウンドだけで計算した標準 DSR（感度。判定に使わない） |
+| N_eff（参考） | ラウンド内の日次リターンの相関行列の参加比 (Σλ)²/Σλ²。SR₀ には使わない（ONC は P12） |
+| ブートストラップ | 定常（arch `StationaryBootstrap`、平均ブロック長 = `optimal_block_length` の `stationary` 列、1 未満は 1）。感度として循環ブロック（`circular` 列を四捨五入）。B 既定 2,000、候補ごとのシード = sha256(実行シード｜candidate_id) の先頭 8 桁 |
+| 期待値・Sharpe の区間 | 再標本の値のパーセンタイル（5%・95%、線形補間）。期待値は比率と × D の金額。再標本で分散 0 が 1% を超えたら Sharpe 区間は null（不安定） |
+| 再標本化した最大 DD の分布 | 再標本ごとに E*_t = D + D·Σr*、最高値は D を含めて累積最大、DD = 最高値 − E*。最大 DD（口座通貨）とその時点の %、の 5・50・95% 点。E* ≤ 0 になった再標本の割合も記録。**日末エクイティの DD なので、ティック単位の `equity_max_dd` とは別物** |
+| 区間を出さない場合 | 30 日未満、NaN・無限大を含む、分散 0（理由を記録） |
+| 警告コード | `LOW_DSR`（保守的な DSR < 0.95）、`SERIAL_DEPENDENCE_HIGH`、`BOOTSTRAP_SENSITIVITY`（循環ブロックの区間幅が定常の 2/3〜3/2 倍の外）。判定ではない |
+
+注意:
+- 巨大な利益の日が 1 日あると、歪度の項（−γ₃·SR）で PSR/DSR が**上がる**（式の性質）。巨大な損失の日は下がる。外れ値の影響は Sharpe の区間の広さで確認する
+- 既知の限界（AR(2) 型の依存では、どの DSR も偶然の合格率 7% 以下を満たさない など）は `docs/research/p6_validation/RESULTS.md` と、各実行の `known_limitations_json` に記録
+
 ## ロバストネス指標（P5、g1、C56〜C59）
 
 実装: `src/robustlab/robustness/grid_stats.py`（純粋関数）、`subperiod.py`。全候補（P4 の合否によらない）について計算し、`evaluation`（stage = `ROBUSTNESS`）に保存する。

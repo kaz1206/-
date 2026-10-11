@@ -12,6 +12,7 @@ dependencies = [
     "pyarrow>=25.0",
     "numpy>=2.3",
     "scipy>=1.16",
+    "arch==8.0.0",
 ]
 
 [project.scripts]
@@ -34,3 +35,4 @@ packages = ["src/robustlab"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+markers = ["slow: Monte Carlo validation (P6, runs by default)"]

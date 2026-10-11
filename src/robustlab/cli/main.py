@@ -29,6 +29,8 @@ filter_app = typer.Typer(no_args_is_help=True, help="Initial filter: profiles, P
 app.add_typer(filter_app, name="filter")
 robust_app = typer.Typer(no_args_is_help=True, help="Robustness: neighbourhood statistics, regions (P5)")
 app.add_typer(robust_app, name="robust")
+stats_app = typer.Typer(no_args_is_help=True, help="Statistics: DSR, block-bootstrap intervals (P6, in-sample)")
+app.add_typer(stats_app, name="stats")
 
 WORKSPACE = typer.Option(Path("workspace"), "--workspace", help="Workspace folder (DB, artifacts)")
 
@@ -572,6 +574,127 @@ def robust_map(robust_id: str, metric: str = typer.Option("score", "--metric", h
         db.close()
     for line in lines:
         typer.echo(line)
+
+
+def _print_stats_summary(s: dict) -> None:
+    for k in ("stat_id", "round_id", "filter_id", "strategy_family", "component", "sample_role", "period",
+              "candidates"):
+        typer.echo(f"{k}: {s[k]}")
+    fam = s["family_inputs"]
+    typer.echo(f"N (family, distinct requested configurations): {s['n_trials']}  "
+               f"[round: {s['n_trials_round']}, trial ledger sum: {fam['trial_ledger_sum']}]")
+    typer.echo(f"V[SR] (family): {s['var_sr']}  from {s['var_sr_count']} distinct (config, period) results  "
+               f"[round: {s['var_sr_round']} from {s['var_sr_round_count']}]")
+    typer.echo(f"excluded from V (still counted in N): {s['excluded']}")
+    typer.echo(f"SR0: {s['sr0']}  [round scope: {s['sr0_round']}]" +
+               (f"  reason: {fam['sr0_reason']}" if fam.get("sr0_reason") else ""))
+    if fam.get("mixed_period_lengths"):
+        typer.echo("note: the family mixes periods; Sharpe precision differs between them (V is larger, conservative)")
+    ne = s["n_eff_reference"]
+    typer.echo(f"N_eff (participation ratio, reference only): {ne.get('value')}"
+               + (f"  reason: {ne['reason']}" if ne.get("reason") else "")
+               + ("  (more trials than days: unstable)" if ne.get("rank_deficient") else ""))
+    typer.echo(f"DSR standard: {s['dsr_standard']}")
+    typer.echo(f"DSR conservative (min of standard / AR(1) / Newey-West / bootstrap SE): {s['dsr_conservative']}")
+    typer.echo(f"SERIAL_DEPENDENCE_HIGH candidates: {s['serial_dependence_high']}")
+    typer.echo("top by conservative DSR:")
+    for t in s["top_by_conservative_dsr"]:
+        typer.echo(f"  {t['candidate_id']} conservative={t['dsr_conservative']} standard={t['dsr']} "
+                   f"ar1={t['dsr_ar1']} nw={t['dsr_newey_west']} rho1={t['rho1']} n*={t['n_ar1']}")
+    typer.echo(f"bootstrap: B={s['bootstrap_reps']} seed={s['seed']} arch {s['arch_version']} "
+               f"(stationary main, circular sensitivity, percentile 90%)")
+    if not s["bootstrap"]:
+        typer.echo("  no bootstrap targets (no P4 pass, no P5 medoid, none requested with --candidate)")
+    for b in s["bootstrap"]:
+        typer.echo(f"  {b}")
+    typer.echo("known limitations:")
+    for x in s["known_limitations"]:
+        typer.echo(f"  - {x}")
+    typer.echo(f"note: {s['note']}")
+
+
+@stats_app.command("run")
+def stats_run(round_id: str, filter_id: str = typer.Option(..., "--filter", help="P4 filter execution"),
+              candidate: list[str] = typer.Option(None, "--candidate", help="Also bootstrap this candidate"),
+              reps: int = typer.Option(2000, "--reps"), seed: int | None = typer.Option(None, "--seed"),
+              workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.stat_eval.run import run_stats
+
+    out = run_stats(workspace, round_id, filter_id, candidate or [], reps, seed)
+    if as_json:
+        _emit({"status": out.status, "message": out.message, **out.summary}, True)
+        raise typer.Exit(out.exit_code)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        _print_stats_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@stats_app.command("show")
+def stats_show(stat_id: str, candidate: str | None = typer.Option(None, "--candidate"),
+               workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.stat_eval.run import NOTE, StatError, summarize
+
+    db = _open(workspace)
+    try:
+        if candidate:
+            row = db.one("SELECT values_json FROM evaluation WHERE stat_id = ? AND candidate_id = ?",
+                         (stat_id, candidate))
+            if row is None:
+                typer.echo(f"no statistics for {candidate} in {stat_id}", err=True)
+                raise typer.Exit(1)
+            v = json.loads(row["values_json"])
+            if as_json:
+                _emit(v, True)
+                return
+            for k in ("sample_role", "period", "score_status", "sharpe", "days", "skewness", "kurtosis", "in_var_sr",
+                      "warnings", "bootstrap_target_reasons"):
+                typer.echo(f"{k}: {v.get(k)}")
+            d = v["dsr"]
+            for k in ("sr0", "dsr", "dsr_ar1", "dsr_newey_west", "dsr_bootstrap_se", "dsr_conservative",
+                      "dsr_conservative_components", "usage"):
+                typer.echo(f"{k}: {d.get(k)}")
+            for k in ("reason", "dsr_reason", "dsr_bootstrap_se_reason"):
+                if d.get(k):
+                    typer.echo(f"{k}: {d[k]}")
+            if d.get("dependence"):
+                typer.echo(f"dependence: {d['dependence']}")
+            typer.echo(f"dsr_round_scope (sensitivity): {v.get('dsr_round_scope')}")
+            b = v.get("bootstrap")
+            if b is None:
+                typer.echo("bootstrap: not a target (not a P4 pass or P5 medoid; use --candidate to request)")
+            elif b["status"] != "OK":
+                typer.echo(f"bootstrap: {b['status']} ({b['reason']})")
+            else:
+                st, cb = b["stationary"], b["circular_sensitivity"]
+                typer.echo(f"bootstrap: B={b['reps']} seed={b['seed']} block length {b['block_length']}")
+                typer.echo(f"  point: {b['point']}")
+                typer.echo(f"  mean 90% CI: {st['mean_ci']}  (amount: {st['mean_amount_ci']})")
+                typer.echo(f"  sharpe 90% CI: {st['sharpe_ci']}" +
+                           (f"  reason: {st['sharpe_ci_reason']}" if st["sharpe_ci_reason"] else ""))
+                typer.echo(f"  resampled max DD (daily close, account currency) 5/50/95%: {st['max_dd_distribution']}")
+                typer.echo(f"  resampled max DD %: {st['max_dd_pct_distribution']}  "
+                           f"resampled bankrupt share: {st['resampled_bankrupt_share']}")
+                typer.echo(f"  circular sensitivity: mean {cb['mean_ci']} sharpe {cb['sharpe_ci']} "
+                           f"max DD {cb['max_dd_distribution']}")
+                if b.get("sensitivity_note"):
+                    typer.echo(f"  sensitivity note: {b['sensitivity_note']}")
+                typer.echo("  note: daily-close DD is not the tick-level equity DD of P2 (equity_max_dd)")
+            typer.echo(f"note: {NOTE}")
+            return
+        try:
+            s = summarize(db, stat_id)
+        except StatError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+    finally:
+        db.close()
+    if as_json:
+        _emit(s, True)
+    else:
+        _print_stats_summary(s)
 
 
 if __name__ == "__main__":  # pragma: no cover

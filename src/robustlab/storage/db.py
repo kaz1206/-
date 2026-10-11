@@ -13,7 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 5  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness
+SCHEMA_VERSION = 6  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
+#                     6: P6 statistics
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -37,6 +38,7 @@ _APPEND_ONLY = (
     "reason_code",
     "robustness_execution",
     "parameter_region",
+    "statistics_execution",
 )
 
 _DDL = """
@@ -289,7 +291,8 @@ CREATE TABLE IF NOT EXISTS evaluation (
     values_json TEXT NOT NULL,
     filter_id TEXT REFERENCES filter_execution(filter_id),
     created_at TEXT NOT NULL,
-    robust_id TEXT
+    robust_id TEXT,
+    stat_id TEXT
 );
 CREATE INDEX IF NOT EXISTS evaluation_candidate ON evaluation(candidate_id);
 
@@ -320,6 +323,38 @@ CREATE TABLE IF NOT EXISTS parameter_region (
     members_json TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS statistics_execution (
+    stat_id TEXT PRIMARY KEY,
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    filter_id TEXT NOT NULL REFERENCES filter_execution(filter_id),
+    strategy_family TEXT NOT NULL,
+    component_name TEXT NOT NULL,
+    component_version TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    sample_role TEXT NOT NULL,
+    from_date TEXT NOT NULL,
+    to_date TEXT NOT NULL,
+    n_trials INTEGER NOT NULL,
+    n_trials_round INTEGER NOT NULL,
+    var_sr REAL,
+    var_sr_count INTEGER NOT NULL,
+    var_sr_round REAL,
+    var_sr_round_count INTEGER NOT NULL,
+    excluded_counts_json TEXT NOT NULL,
+    sr0 REAL,
+    sr0_round REAL,
+    n_eff_reference_json TEXT NOT NULL,
+    family_inputs_json TEXT NOT NULL,
+    bootstrap_reps INTEGER NOT NULL,
+    seed INTEGER NOT NULL,
+    bootstrap_targets_json TEXT NOT NULL,
+    arch_version TEXT NOT NULL,
+    known_limitations_json TEXT NOT NULL,
+    n_candidates INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS statistics_execution_round ON statistics_execution(round_id);
 
 CREATE TABLE IF NOT EXISTS decision (
     decision_id TEXT PRIMARY KEY,
@@ -380,11 +415,13 @@ class Database:
         cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(evaluation)")}
         if "robust_id" not in cols:  # v4 -> v5 adds one nullable column (existing rows unchanged)
             self.conn.execute("ALTER TABLE evaluation ADD COLUMN robust_id TEXT")
+        if "stat_id" not in cols:  # v5 -> v6 adds one nullable column (existing rows unchanged)
+            self.conn.execute("ALTER TABLE evaluation ADD COLUMN stat_id TEXT")
         with self.tx():
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
-            elif row["version"] in (1, 2, 3, 4):
+            elif row["version"] in (1, 2, 3, 4, 5):
                 # every step so far only adds tables (created above by the idempotent DDL)
                 self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:

@@ -1,0 +1,49 @@
+{
+ "reps": 2000,
+ "rows": [
+  {
+   "situation": "independent, Sharpe 0.12",
+   "judged": true,
+   "dsr": 0.9475,
+   "dsr_ar1": 0.941,
+   "dsr_conservative": 0.935,
+   "dsr_conservative_ci": [
+    0.9232936210254108,
+    0.9454101624918255
+   ]
+  },
+  {
+   "situation": "AR(1) 0.2, Sharpe 0.12",
+   "judged": false,
+   "dsr": 0.89,
+   "dsr_ar1": 0.7725,
+   "dsr_conservative": 0.7645,
+   "dsr_conservative_ci": [
+    0.7452740959146991,
+    0.7829473654567269
+   ]
+  },
+  {
+   "situation": "AR(1) 0.4, Sharpe 0.12",
+   "judged": false,
+   "dsr": 0.781,
+   "dsr_ar1": 0.464,
+   "dsr_conservative": 0.457,
+   "dsr_conservative_ci": [
+    0.43499475914582886,
+    0.4791314845631204
+   ]
+  },
+  {
+   "situation": "AR(1) 0.4, Sharpe 0.20",
+   "judged": true,
+   "dsr": 0.9955,
+   "dsr_ar1": 0.9475,
+   "dsr_conservative": 0.943,
+   "dsr_conservative_ci": [
+    0.9319224956206372,
+    0.952755033198733
+   ]
+  }
+ ]
+}

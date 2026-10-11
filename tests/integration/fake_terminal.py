@@ -28,6 +28,7 @@ import codecs
 import datetime as dt
 import itertools
 import json
+import math
 import os
 import sys
 import time
@@ -128,7 +129,9 @@ def optimize(data_dir: Path, common: Path, kv: dict[str, str], params: dict[str,
         (common / f"{prefix}fm_init.json").write_text(json.dumps(
             {"job_id": job_id, "telemetry_version": "3", "terminal_build": build, "mql_frame_mode": True}))
         lines, daily = [], ["pass,date,balance_close,equity_close,equity_min,equity_max,positions_max,ticks"]
-        days = [start, start + dt.timedelta(days=1), end - dt.timedelta(days=1)]
+        n_days = int(os.environ.get("FAKE_OPT_DAYS", "3"))  # P6: a longer daily series for the bootstrap
+        days = ([start, start + dt.timedelta(days=1), end - dt.timedelta(days=1)] if n_days == 3
+                else [start + dt.timedelta(days=i) for i in range(n_days)])
         for pass_no, combo in reversed(frames):  # frames arrive out of pass order (X4)
             profit, trades = result(combo)
             stats = {k: 0.0 for k in ("gross_profit", "gross_loss", "balance_dd", "equity_dd", "profit_factor",
@@ -145,9 +148,13 @@ def optimize(data_dir: Path, common: Path, kv: dict[str, str], params: dict[str,
                              "equity_max_dd_pct": 0.075, "max_floating_loss": -3.0, "max_positions": 1,
                              "max_lots": 0.01, "min_margin_level": None, "stop_out_deals": 0},
                 "ticks": 5000, "first_tick": f"{start:%Y.%m.%d} 00:05:00",
-                "last_tick": f"{end - dt.timedelta(days=1):%Y.%m.%d} 22:00:00", "bars": 100, "days": 3}))
+                "last_tick": f"{end - dt.timedelta(days=1):%Y.%m.%d} 22:00:00", "bars": 100, "days": len(days)}))
             for k, day in enumerate(days, start=1):
-                eq = deposit + profit * k / 3 + (0.5 * (k % 2) if trades and k < 3 else 0.0)
+                if n_days == 3:
+                    eq = deposit + profit * k / 3 + (0.5 * (k % 2) if trades and k < 3 else 0.0)
+                else:  # deterministic wiggle around a straight line (autocorrelated, as an EA holding positions)
+                    wiggle = 3.0 * math.sin(k * (0.7 + 0.01 * float(combo[0]))) + 2.0 * math.sin(k * 0.13)
+                    eq = deposit + profit * k / n_days + (wiggle if trades and k < n_days else 0.0)
                 if mode == "bad_daily" and k == 3:
                     eq += 1
                 daily.append(f"{pass_no},{day:%Y.%m.%d},{eq:.2f},{eq:.2f},{eq - 1:.2f},{eq + 1:.2f},1,100")

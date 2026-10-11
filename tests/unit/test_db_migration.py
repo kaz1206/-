@@ -8,7 +8,8 @@ from robustlab.storage.db import SCHEMA_VERSION, Database
 @pytest.mark.parametrize(("old", "dropped"), [(1, ["run_metrics", "trial_ledger", "decision"]),
                                              (2, ["trial_ledger", "opt_job", "evaluation"]),
                                              (3, ["filter_execution", "evaluation", "decision", "reason_code"]),
-                                             (4, ["robustness_execution", "parameter_region"])])
+                                             (4, ["robustness_execution", "parameter_region"]),
+                                             (5, ["statistics_execution"])])
 def test_old_database_is_migrated(tmp_path, old, dropped):
     path = tmp_path / "w.sqlite"
     Database(path).close()
@@ -20,9 +21,27 @@ def test_old_database_is_migrated(tmp_path, old, dropped):
     con.close()
     db = Database(path)
     try:
-        assert db.one("SELECT version FROM schema_version")["version"] == SCHEMA_VERSION == 5
+        assert db.one("SELECT version FROM schema_version")["version"] == SCHEMA_VERSION == 6
         for t in dropped:
             assert db.one("SELECT name FROM sqlite_master WHERE name = ?", (t,)) is not None
+    finally:
+        db.close()
+
+
+def test_v5_evaluation_gets_the_stat_id_column(tmp_path):
+    path = tmp_path / "w.sqlite"
+    Database(path).close()
+    con = sqlite3.connect(path)
+    con.execute("DROP TABLE statistics_execution")
+    con.execute("ALTER TABLE evaluation DROP COLUMN stat_id")
+    con.execute("UPDATE schema_version SET version = 5")
+    con.commit()
+    con.close()
+    db = Database(path)
+    try:
+        cols = {r["name"] for r in db.all("PRAGMA table_info(evaluation)")}
+        assert {"robust_id", "stat_id"} <= cols
+        assert db.one("SELECT version FROM schema_version")["version"] == 6
     finally:
         db.close()
 
@@ -32,7 +51,8 @@ def test_research_tables_of_p3_p4_are_append_only(tmp_path):
     try:
         names = {r["name"] for r in db.all("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
         for t in ("optimization_round", "opt_job_artifact", "pass_result", "trial_ledger", "filter_execution",
-                  "evaluation", "decision", "reason_code", "robustness_execution", "parameter_region"):
+                  "evaluation", "decision", "reason_code", "robustness_execution", "parameter_region",
+                  "statistics_execution"):
             assert {f"{t}_no_update", f"{t}_no_delete"} <= names
         with pytest.raises(ValueError):
             db.update_job("x", table="pass_result", status="X")

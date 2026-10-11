@@ -1,0 +1,35 @@
+   Building robustlab @ file:///home/user/-
+      Built robustlab @ file:///home/user/-
+Uninstalled 1 package in 2ms
+Installed 1 package in 1ms
+============================= test session starts ==============================
+platform linux -- Python 3.13.16, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/user/-
+configfile: pyproject.toml
+testpaths: tests
+plugins: hypothesis-6.168.5
+collected 258 items
+
+tests/integration/test_cli.py ...                                        [  1%]
+tests/integration/test_filter.py .....                                   [  3%]
+tests/integration/test_optimization.py ..............                    [  8%]
+tests/integration/test_robustness_run.py ...                             [  9%]
+tests/integration/test_single_backtest.py ......................         [ 18%]
+tests/integration/test_stats_run.py .....                                [ 20%]
+tests/unit/test_config_loader.py ..........                              [ 24%]
+tests/unit/test_db_migration.py .......                                  [ 26%]
+tests/unit/test_dsr_bootstrap.py .....................                   [ 34%]
+tests/unit/test_ids_params.py ...............                            [ 40%]
+tests/unit/test_ini_telemetry.py ......................                  [ 49%]
+tests/unit/test_metrics_engine.py ..............                         [ 54%]
+tests/unit/test_optimization_units.py ...............                    [ 60%]
+tests/unit/test_psr_gates.py ........................................... [ 77%]
+................                                                         [ 83%]
+tests/unit/test_repo_configs.py ...                                      [ 84%]
+tests/unit/test_robustness.py ..............                             [ 89%]
+tests/unit/test_storage_guard.py ...........                             [ 94%]
+tests/unit/test_telemetry_v2.py .........                                [ 97%]
+tests/unit/test_terminal_patterns.py ..                                  [ 98%]
+tests/validation/test_p6_montecarlo.py ....                              [100%]
+
+======================= 258 passed in 194.95s (0:03:14) ========================
