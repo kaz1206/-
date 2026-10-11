@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1〜P5 は完了（P5 まで実機確認合格）。P6（DSR・ブートストラップ信頼区間）は実装済み・Linux の全テスト合格で、実データでの動作確認待ち。
+P1〜P6 は完了（P6 まで実機・実データで確認合格）。次は P7（判定）の計画。
 
 ## 主要ドキュメント
 
@@ -9,7 +9,7 @@ P1〜P5 は完了（P5 まで実機確認合格）。P6（DSR・ブートスト�
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
-- P6 計画（承認済み・実装済み、C61〜C67）: `docs/plans/P6_PLAN.md`、検証結果: `docs/research/p6_validation/RESULTS.md`
+- P6 計画（完了、C61〜C67）: `docs/plans/P6_PLAN.md`、検証結果: `docs/research/p6_validation/RESULTS.md`
 - P5 計画（完了、C56〜C60）: `docs/plans/P5_PLAN.md`
 - P4 計画（完了、C51〜C55）: `docs/plans/P4_PLAN.md`、PSR の入力定義: `docs/metrics_definitions.md`、プロファイル: `configs/strategy_profiles.yaml`
 - P3 計画（完了、C40〜C50）: `docs/plans/P3_PLAN.md`、実機確認: `verification/p3/RECORD.md`、E2E 手順: `docs/runbooks/P3_E2E.md`
