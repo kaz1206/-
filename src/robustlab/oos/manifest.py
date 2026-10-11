@@ -46,9 +46,10 @@ REASON_CODES: dict[str, tuple[str, str, str]] = {
 }
 PASS_TEXT = ("PASS = not refuted by the criteria fixed before the run. It is NOT proof that an edge exists or "
              "will continue.")
-FAIL_TEXT = ("FAIL = the criteria fixed before the run were not met. It is NOT proof that an edge disappeared: the "
-             "band is centred on validation results of candidates selected on that same data (winner's curse), so "
-             "it is biased upwards.")
+FAIL_TEXT = ("FAIL = the criteria fixed before the run were not met. It is NOT proof that an edge disappeared "
+             "(a real but weak edge can also lose money over a short OOS).")
+BAND_FAIL_TEXT = (" The band gate failed: the band is centred on validation results of candidates selected on that same "
+                  "data (winner's curse), so it is biased upwards.")
 SIMULATION_NOTE = ("Simulation estimates, NOT error rates for this EA: under the simulated conditions (daily Sharpe "
                    "0.05-0.12, independent / AR(1) / GARCH returns, 631 validation days, 520 OOS days), a real edge "
                    "that persists fell below the band in 8-14% of P8a passes for moderate edges (5.6% for daily "
@@ -279,7 +280,9 @@ def _evaluate(db: Database, store: ArtifactStore, man: Any, rnd: Any) -> None:
                 "band": bands[cd], "net_profit": net, "net_after_cost": net_cost, "days": pv["days"],
                 "trades": pv["trades"], "observed_spread_points": pv["observed_spread_points"],
                 "p_value_recorded_only": p_only["p"], "psr_recorded_only": p_only.get("psr"),
-                "interpretation": PASS_TEXT if not reasons else FAIL_TEXT, "simulation_note": SIMULATION_NOTE,
+                "interpretation": PASS_TEXT if not reasons else
+                FAIL_TEXT + (BAND_FAIL_TEXT if "OOS_BELOW_PREDICTION_BAND" in reasons else ""),
+                "simulation_note": SIMULATION_NOTE,
                 "version": VERSION,
             }
             db.insert("evaluation", {

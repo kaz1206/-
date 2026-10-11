@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複数期間検証）も完了（実機は診断モードで確認）。P8b（OOS）は実装済み・Linux の全テスト合格で、練習用ワークスペースでの実機確認待ち。**本番の Holdout は練習で一度きりの実行・封印・再実行の拒否を確認するまで使わない。**
+P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複数期間検証）も完了（実機は診断モードで確認）。P8b（OOS）も完了（練習用ワークスペースで一度きりの実行・封印・再実行の拒否を実機確認）。**本番の Holdout は封印したまま。本物の EA で P8a の合格者が出るまで使わない。** 次は P9（リスクと資金配分）の計画。
 
 ## 主要ドキュメント
 
@@ -9,7 +9,7 @@ P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
-- P8b 計画（承認済み・実装済み、C74〜C76）: `docs/plans/P8B_PLAN.md`、練習用の設定: `configs/rehearsal/`
+- P8b 計画（完了、C74〜C76）: `docs/plans/P8B_PLAN.md`、練習用の設定: `configs/rehearsal/`
 - P8 計画（P8a 完了、C71〜C73）: `docs/plans/P8_PLAN.md`、検証計画: `configs/validation_plans/`、追加コスト: `configs/cost_stress.yaml`
 - P7 計画（完了、C68〜C70）: `docs/plans/P7_PLAN.md`、検証結果: `docs/research/p7_validation/RESULTS.md`、プロファイル: `configs/selection_profiles.yaml`
 - P6 計画（完了、C61〜C67）: `docs/plans/P6_PLAN.md`、検証結果: `docs/research/p6_validation/RESULTS.md`
