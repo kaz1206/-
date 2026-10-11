@@ -29,6 +29,8 @@ filter_app = typer.Typer(no_args_is_help=True, help="Initial filter: profiles, P
 app.add_typer(filter_app, name="filter")
 robust_app = typer.Typer(no_args_is_help=True, help="Robustness: neighbourhood statistics, regions (P5)")
 app.add_typer(robust_app, name="robust")
+select_app = typer.Typer(no_args_is_help=True, help="Selection: gates, region representatives, budget (P7)")
+app.add_typer(select_app, name="select")
 stats_app = typer.Typer(no_args_is_help=True, help="Statistics: DSR, block-bootstrap intervals (P6, in-sample)")
 app.add_typer(stats_app, name="stats")
 
@@ -452,6 +454,9 @@ def why_not_cmd(candidate_id: str, filter_id: str | None = typer.Option(None, "-
     try:
         try:
             w = why_not(db, candidate_id, filter_id)
+            from robustlab.selection.run import selection_of
+
+            w["selection"] = selection_of(db, candidate_id)
         except FilterError as e:
             typer.echo(str(e), err=True)
             raise typer.Exit(1) from e
@@ -484,6 +489,8 @@ def why_not_cmd(candidate_id: str, filter_id: str | None = typer.Option(None, "-
     if w["decisions_for_candidate"] > 1:
         typer.echo(f"note: {w['decisions_for_candidate']} filter decisions exist for this candidate; "
                    "use --filter to pick one")
+    if w.get("selection"):
+        _print_selection_decision(w["selection"])
 
 
 def _print_robust_summary(s: dict) -> None:
@@ -695,6 +702,103 @@ def stats_show(stat_id: str, candidate: str | None = typer.Option(None, "--candi
         _emit(s, True)
     else:
         _print_stats_summary(s)
+
+
+def _print_selection_decision(sd: dict) -> None:
+    det = sd["details"]
+    typer.echo(f"selection: {sd['sel_id']} ({sd['component']}, profile {det['profile']} {det['profile_hash'][:16]})  "
+               f"outcome: {sd['outcome']}")
+    typer.echo("  reasons: " + (", ".join(sd["reasons"]) or "-") + "  warnings: " + (", ".join(sd["warnings"]) or "-"))
+    for g in det["gates"]:
+        note = f"  ({g['note']})" if g.get("note") else ""
+        typer.echo(f"  {g['status']:<14} {g['gate']:<16} value={g['value']} threshold={g['threshold']}{note}")
+    nb = det["neighbourhood"]
+    typer.echo(f"  neighbourhood (R3, 独自拡張): counted={nb['r3']['counted']} floor={nb['floor']} "
+               f"no_trade_left_out={nb['r3']['no_trade']} ruin={nb['r3']['ruin']} "
+               f"robust_score={nb['r3']['robust_score']}  | P5 standard: robust_score={nb['p5']['robust_score']}")
+    rk = det["rank"]
+    if rk["layer"] is not None:
+        typer.echo(f"  rank: layer={rk['layer']} mean_rank={rk['mean_rank']} ranks={rk['ranks']} "
+                   f"selected_rank={rk['selected_rank']} inputs={rk['inputs']}")
+    typer.echo("  note: DSR is used for relative ranking only, never as a gate (C62)")
+
+
+def _print_select_summary(s: dict) -> None:
+    for k in ("sel_id", "round_id", "filter_id", "robust_id", "stat_id", "selector", "profile", "budget"):
+        typer.echo(f"{k}: {s[k]}")
+    typer.echo(f"candidates: {s['candidates']}  P4 pass (eligible): {s['eligible_p4_pass']}  "
+               f"gate pass: {s['gate_pass']}  region representatives: {s['representatives']}  "
+               f"selected: {s['selected_count']}")
+    if s["outcome_reason"]:
+        typer.echo(f"outcome_reason: {s['outcome_reason']}")
+    if s["revision_no"]:
+        typer.echo(f"SELECTION_REVISED: this round was selected {s['revision_no']} time(s) before with other "
+                   "inputs or settings")
+    typer.echo(f"outcomes: {s['outcomes']}")
+    typer.echo(f"reasons: {s['reason_counts']}")
+    typer.echo(f"warnings: {s['warning_counts']}")
+    typer.echo("selected (integrated rank order):")
+    if not s["selected"]:
+        typer.echo("  none")
+    for x in s["selected"]:
+        typer.echo(f"  {x['rank']}. {x['candidate_id']} {x['params']} layer={x['layer']} mean_rank={x['mean_rank']} "
+                   f"robust={x['robust_score_r3']} dsr={x['dsr_conservative']} maxDD95={x['max_dd_p95']} "
+                   f"warnings={x['warnings']}")
+    typer.echo("known limitations:")
+    for t in s["known_limitations"]:
+        typer.echo(f"  - {t}")
+    typer.echo(f"note: {s['note']}")
+
+
+@select_app.command("run")
+def select_run(round_id: str, filter_id: str = typer.Option(..., "--filter", help="P4 filter execution"),
+               robust_id: str = typer.Option(..., "--robust", help="P5 robustness execution"),
+               stat_id: str = typer.Option(..., "--stats", help="P6 statistics execution"),
+               profile: str = typer.Option("default", "--profile"),
+               profiles: Path = typer.Option(Path("configs/selection_profiles.yaml"), "--profiles"),
+               workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.selection.run import run_select
+
+    out = run_select(workspace, round_id, filter_id, robust_id, stat_id, profiles, profile)
+    if as_json:
+        _emit({"status": out.status, "message": out.message, **out.summary}, True)
+        raise typer.Exit(out.exit_code)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        _print_select_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@select_app.command("show")
+def select_show(sel_id: str, candidate: str | None = typer.Option(None, "--candidate"),
+                workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.selection.run import SelectError, selection_of, summarize
+
+    db = _open(workspace)
+    try:
+        if candidate:
+            sd = selection_of(db, candidate, sel_id)
+            if sd is None:
+                typer.echo(f"no selection decision for {candidate} in {sel_id}", err=True)
+                raise typer.Exit(1)
+            if as_json:
+                _emit(sd, True)
+            else:
+                _print_selection_decision(sd)
+            return
+        try:
+            s = summarize(db, sel_id)
+        except SelectError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+    finally:
+        db.close()
+    if as_json:
+        _emit(s, True)
+    else:
+        _print_select_summary(s)
 
 
 if __name__ == "__main__":  # pragma: no cover

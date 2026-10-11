@@ -119,6 +119,8 @@ def optimize(data_dir: Path, common: Path, kv: dict[str, str], params: dict[str,
         if mode == "mixed" and x[0] >= x[-1]:
             return 0.0, 0  # an idle pass: no trade at all
         profit = round((x[0] - x[-1] / 4) * 0.37, 2)
+        if os.environ.get("FAKE_OPT_EDGE"):  # P7: enough trades and a strong drift so that P4 passes appear
+            return round(profit * 40, 2), 40 + int(x[0]) % 7
         return profit, 10 + int(x[0]) % 7
 
     def bankrupt(combo):

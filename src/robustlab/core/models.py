@@ -6,7 +6,7 @@ import datetime as dt
 import enum
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -267,6 +267,32 @@ class StrategyProfile(_Strict):
 
 class ProfileFile(_Strict):
     profiles: dict[str, StrategyProfile]
+
+
+class SelectionProfile(_Strict):
+    """P7 gates, ranking and budget, fixed before selection (P7_PLAN §3, R1-R8). Hashed into every decision."""
+
+    description: str = ""
+    selector: Literal["region_pareto_v1"] = "region_pareto_v1"
+    budget: int = 5
+    per_region: int = 1
+    peak_ratio_max: float = 1.5
+    robust_score_min_exclusive: float = 0.0
+    dsr_warn_below: float = 0.95
+
+    @model_validator(mode="after")
+    def _valid(self) -> SelectionProfile:
+        if self.budget < 1:
+            raise ValueError("budget must be >= 1")
+        if self.per_region != 1:
+            raise ValueError("per_region must be 1 (region_pareto_v1 picks one representative per region)")
+        if self.peak_ratio_max <= 1:
+            raise ValueError("peak_ratio_max must be > 1")
+        return self
+
+
+class SelectionProfileFile(_Strict):
+    profiles: dict[str, SelectionProfile]
 
 
 class TerminalConfig(_Strict):

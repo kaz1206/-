@@ -1,0 +1,34 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.16, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/user/-
+configfile: pyproject.toml
+testpaths: tests
+plugins: hypothesis-6.168.5
+collected 286 items
+
+tests/integration/test_cli.py ...                                        [  1%]
+tests/integration/test_filter.py .....                                   [  2%]
+tests/integration/test_optimization.py ..............                    [  7%]
+tests/integration/test_robustness_run.py ...                             [  8%]
+tests/integration/test_select_run.py .....                               [ 10%]
+tests/integration/test_single_backtest.py ......................         [ 18%]
+tests/integration/test_stats_run.py .....                                [ 19%]
+tests/unit/test_config_loader.py ..........                              [ 23%]
+tests/unit/test_db_migration.py .........                                [ 26%]
+tests/unit/test_dsr_bootstrap.py .....................                   [ 33%]
+tests/unit/test_ids_params.py ...............                            [ 39%]
+tests/unit/test_ini_telemetry.py ......................                  [ 46%]
+tests/unit/test_metrics_engine.py ..............                         [ 51%]
+tests/unit/test_optimization_units.py ...............                    [ 56%]
+tests/unit/test_psr_gates.py ........................................... [ 72%]
+................                                                         [ 77%]
+tests/unit/test_repo_configs.py ...                                      [ 78%]
+tests/unit/test_robustness.py ..............                             [ 83%]
+tests/unit/test_selection.py ....................                        [ 90%]
+tests/unit/test_storage_guard.py ...........                             [ 94%]
+tests/unit/test_telemetry_v2.py .........                                [ 97%]
+tests/unit/test_terminal_patterns.py ..                                  [ 98%]
+tests/validation/test_p6_montecarlo.py ....                              [ 99%]
+tests/validation/test_p7_benchmark.py .                                  [100%]
+
+======================= 286 passed in 277.74s (0:04:37) ========================

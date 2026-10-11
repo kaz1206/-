@@ -179,7 +179,8 @@ def why_not(db: Database, candidate_id: str, filter_id: str | None = None) -> di
         if row is None:
             raise FilterError(f"no filter decision for {candidate_id}")
         filter_id = row["filter_id"]
-    d = db.one("SELECT * FROM decision WHERE candidate_id = ? AND filter_id = ?", (candidate_id, filter_id))
+    d = db.one("SELECT * FROM decision WHERE candidate_id = ? AND filter_id = ? AND stage = 'FILTER'",
+               (candidate_id, filter_id))
     if d is None:
         raise FilterError(f"no decision for {candidate_id} in {filter_id}")
     ev = db.one("SELECT values_json FROM evaluation WHERE candidate_id = ? AND filter_id = ?", (candidate_id, filter_id))

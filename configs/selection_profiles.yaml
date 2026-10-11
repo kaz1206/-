@@ -1,0 +1,14 @@
+# Selection profiles for P7 (P7_PLAN §3, approved R1-R8, 2026-10-11).
+# Fixed BEFORE selecting: the content is hashed into every selection decision. Changing a value creates a new
+# selection execution (recorded as SELECTION_REVISED for the round); old decisions are never rewritten.
+# DSR is used for relative ranking only: it is never a gate, a reason code or a threshold (C62, R4).
+# dsr_warn_below only sets the LOW_DSR warning.
+profiles:
+  default:
+    description: "region_pareto_v1: gates -> one representative per region -> Pareto layers + mean rank -> budget"
+    selector: region_pareto_v1
+    budget: 5                        # R6
+    per_region: 1                    # R6
+    peak_ratio_max: 1.5              # R2, ARCHITECTURE §9.2
+    robust_score_min_exclusive: 0.0  # R2: Robust Score <= 0 fails
+    dsr_warn_below: 0.95             # warning only

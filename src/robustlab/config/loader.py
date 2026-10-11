@@ -14,6 +14,8 @@ from robustlab.core.models import (
     BacktestRequest,
     DataPartition,
     ProfileFile,
+    SelectionProfile,
+    SelectionProfileFile,
     StrategyProfile,
     StrategySpec,
     StudyRequest,
@@ -94,6 +96,15 @@ def load_study(path: Path) -> LoadedStudy:
     strategy = _parse(StrategySpec, strategy_path, load_yaml(strategy_path))
     study_hash = sha256_hex(canonical_json(study.model_dump(mode="json")))
     return LoadedStudy(study, path.resolve(), strategy, strategy_path, study_hash)
+
+
+def load_selection_profile(path: Path, name: str) -> tuple[SelectionProfile, str]:
+    """One selection profile and the hash of its content (recorded with every P7 decision)."""
+    pf = _parse(SelectionProfileFile, path, load_yaml(path))
+    if name not in pf.profiles:
+        raise ConfigError(f"{path}: unknown selection profile {name!r} (have {sorted(pf.profiles)})")
+    prof = pf.profiles[name]
+    return prof, sha256_hex(canonical_json({"name": name, **prof.model_dump(mode="json")}))
 
 
 def load_profile(path: Path, name: str) -> tuple[StrategyProfile, str]:

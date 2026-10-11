@@ -3,6 +3,23 @@
 実装: `src/robustlab/metrics/engine.py`（純粋関数）、照合: `src/robustlab/metrics/compare.py`。
 定義を変えたら `METRIC_DEF_VERSION` を上げ、本書に新しい版の節を追加する（古い計算結果は消さない）。
 
+## 判定と選抜（P7、region_pareto_v1 s1、C68〜C70）
+
+**Discovery 期間の値だけで決める。選ばれたことはエッジの証拠ではない（エッジなしの合成データでも 73% の回で何かが選ばれる）。DSR は相対順位にだけ使う。**
+
+| 項目 | 定義 |
+|---|---|
+| 対象 | P4 で PASS の候補（それ以外は件数だけ） |
+| 近傍（R3、**独自拡張**） | チェビシェフ距離 1、グリッドの外と候補のないセルは数えない。`NO_TRADES` は数えない。`BANKRUPTCY`・`STOP_OUT`・`NOT_COMPUTABLE` は −∞ として数える |
+| 近傍数の下限 | ⌈(3^d − 1)/2⌉（2 次元で 4）。未満は `NEIGHBORHOOD_INSUFFICIENT` |
+| Robust Score（R3） | 自分と数えた近傍の値の 25% 分位点（`inverted_cdf`）。≤ 0 または −∞ は `NEIGHBORHOOD_UNSTABLE` |
+| 近傍の破産 | 破産・ロスカットの近傍が 1 つでもあれば `NEIGHBORHOOD_UNSTABLE` |
+| 孤立したピーク | P5 の `ISOLATED_PASS`、自分 ÷ 数えた近傍の中央値 > 1.5、または中央値 ≤ 0 → `ISOLATED_PEAK` |
+| 領域の代表 | ゲート合格の中でメドイドへのチェビシェフ距離が最小。同じ距離なら統合順位、次に candidate_id。他は `REDUNDANT_IN_REGION` |
+| 統合順位 | 物差し: Robust Score（R3、↑、小数 9 桁）、保守的な DSR（↑、9 桁）、再標本化した最大 DD の 95% 点（↓、2 桁）。欠けた値は最悪扱い＋`RANK_INPUT_MISSING`。パレートの層 → 各物差しの順位（同値は平均順位）の単純平均 → Robust Score の順位 → 最大 DD の順位 → DSR の順位 → candidate_id |
+| 予算 | 上位 5 件を `SELECTED`。残りは、選ばれた候補に支配されていれば `DOMINATED`、それ以外は `NOT_SELECTED_BUDGET` |
+| 警告 | `LOW_DSR`（< 0.95）、`SERIAL_DEPENDENCE_HIGH`、`BOOTSTRAP_SENSITIVITY`、`SHARPE_CI_INCLUDES_ZERO`、`EDGE`、`NO_TRADE_NEIGHBOURS`、`SUBPERIOD_INCONSISTENT`、P4 の警告、`RANK_INPUT_MISSING`、`SELECTION_REVISED`（同じラウンドの 2 回目以降の選抜） |
+
 ## 統計評価（P6、dsr1 ＋ bs1、C61〜C67）
 
 **すべて `DISCOVERY_IN_SAMPLE`（候補を選んだ期間の内側の値）。OOS の証拠ではない。DSR は警告・順位づけのみに使い、単独で合否を決めない（C62）。**

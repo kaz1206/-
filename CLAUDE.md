@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1〜P6 は完了（P6 まで実機・実データで確認合格）。次は P7（判定）の計画。
+P1〜P6 は完了（P6 まで実機・実データで確認合格）。P7（判定と選抜）は実装済み・Linux の全テスト合格で、実データでの動作確認待ち。
 
 ## 主要ドキュメント
 
@@ -9,6 +9,7 @@ P1〜P6 は完了（P6 まで実機・実データで確認合格）。次は P7
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
+- P7 計画（承認済み・実装済み、C68〜C70）: `docs/plans/P7_PLAN.md`、検証結果: `docs/research/p7_validation/RESULTS.md`、プロファイル: `configs/selection_profiles.yaml`
 - P6 計画（完了、C61〜C67）: `docs/plans/P6_PLAN.md`、検証結果: `docs/research/p6_validation/RESULTS.md`
 - P5 計画（完了、C56〜C60）: `docs/plans/P5_PLAN.md`
 - P4 計画（完了、C51〜C55）: `docs/plans/P4_PLAN.md`、PSR の入力定義: `docs/metrics_definitions.md`、プロファイル: `configs/strategy_profiles.yaml`
@@ -49,6 +50,7 @@ P1〜P6 は完了（P6 まで実機・実データで確認合格）。次は P7
 - 偶然の合格率が基準を満たさない依存構造（AR(2) など）は既知の限界として結果に明示し、補正で安全性が保証されたとは扱わない。
 - P8 の OOS 検証では、期間の事前固定・結果閲覧後のパラメータ変更による汚染管理（`HOLDOUT_CONTAMINATED`）・再試行の記録を徹底する。P10 は実際の EA の構造を反映した帰無仮説で行い、前提・限界・偶然の合格率を記録する。
 - 事前登録した合格基準は結果を見た後に緩めない。未達は未達として記録する。
+- P7 で選ばれたことはエッジの証拠ではない（エッジなしの合成データでも 73% の回で何かが選ばれる）。P7 は P8・P10 に進める候補を絞る段階。P7 の判定は `filter_id` を空にして `sel_id` で結ぶ。
 
 ## 実行環境メモ
 
@@ -64,6 +66,7 @@ P1〜P6 は完了（P6 まで実機・実データで確認合格）。次は P7
 - CLI（P4〜P6）: `rlab filter run <round_id> --profile <name>` / `rlab why-not <candidate_id>` / `rlab robust run <round_id> --filter <filter_id>` / `rlab stats run <round_id> --filter <filter_id> [--candidate <cd>] [--reps 2000] [--seed N]` / `rlab stats show <stat_id> [--candidate <cd>]`
 - CLI（P3）: `rlab optimize run <study.yaml> [--rerun]` / `rlab optimize show <round_id>` / `rlab optimize pass <round_id> <candidate_id>` / `rlab trials show <strategy_family>`
 - CLI（P4）: `rlab filter run <round_id> --profile <name>` / `rlab filter show <filter_id>` / `rlab why-not <candidate_id> [--filter <filter_id>]`
+- CLI（P7）: `rlab select run <round_id> --filter <fl> --robust <rb> --stats <st> [--profile default]` / `rlab select show <sel_id> [--candidate <cd>]`
 - CLI（P5）: `rlab robust run <round_id> --filter <filter_id>` / `rlab robust show <robust_id> [--candidate <cd>]` / `rlab robust map <robust_id> [--metric score|robust]`
 - 終了コード: 0 成功、1 設定・入力エラー、2 実行時の失敗、3 Holdout Guard による拒否
 

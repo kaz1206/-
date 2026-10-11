@@ -13,8 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 6  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
-#                     6: P6 statistics
+SCHEMA_VERSION = 7  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
+#                     6: P6 statistics; 7: P7 selection
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -39,6 +39,7 @@ _APPEND_ONLY = (
     "robustness_execution",
     "parameter_region",
     "statistics_execution",
+    "selection_execution",
 )
 
 _DDL = """
@@ -356,6 +357,31 @@ CREATE TABLE IF NOT EXISTS statistics_execution (
 );
 CREATE INDEX IF NOT EXISTS statistics_execution_round ON statistics_execution(round_id);
 
+CREATE TABLE IF NOT EXISTS selection_execution (
+    sel_id TEXT PRIMARY KEY,
+    round_id TEXT NOT NULL REFERENCES optimization_round(round_id),
+    filter_id TEXT NOT NULL REFERENCES filter_execution(filter_id),
+    robust_id TEXT NOT NULL REFERENCES robustness_execution(robust_id),
+    stat_id TEXT NOT NULL REFERENCES statistics_execution(stat_id),
+    profile_name TEXT NOT NULL,
+    profile_hash TEXT NOT NULL,
+    profile_json TEXT NOT NULL,
+    selector_name TEXT NOT NULL,
+    selector_version TEXT NOT NULL,
+    budget INTEGER NOT NULL,
+    n_candidates INTEGER NOT NULL,
+    n_eligible INTEGER NOT NULL,
+    n_gate_pass INTEGER NOT NULL,
+    n_representatives INTEGER NOT NULL,
+    n_selected INTEGER NOT NULL,
+    selected_json TEXT NOT NULL,
+    outcome_reason TEXT,
+    revision_no INTEGER NOT NULL,
+    known_limitations_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS selection_execution_round ON selection_execution(round_id);
+
 CREATE TABLE IF NOT EXISTS decision (
     decision_id TEXT PRIMARY KEY,
     candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
@@ -367,7 +393,8 @@ CREATE TABLE IF NOT EXISTS decision (
     warning_codes_json TEXT NOT NULL,
     details_json TEXT NOT NULL,
     filter_id TEXT REFERENCES filter_execution(filter_id),
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    sel_id TEXT
 );
 CREATE INDEX IF NOT EXISTS decision_candidate ON decision(candidate_id);
 CREATE INDEX IF NOT EXISTS decision_filter ON decision(filter_id);
@@ -417,11 +444,14 @@ class Database:
             self.conn.execute("ALTER TABLE evaluation ADD COLUMN robust_id TEXT")
         if "stat_id" not in cols:  # v5 -> v6 adds one nullable column (existing rows unchanged)
             self.conn.execute("ALTER TABLE evaluation ADD COLUMN stat_id TEXT")
+        dcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(decision)")}
+        if "sel_id" not in dcols:  # v6 -> v7 adds one nullable column (existing rows unchanged)
+            self.conn.execute("ALTER TABLE decision ADD COLUMN sel_id TEXT")
         with self.tx():
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
-            elif row["version"] in (1, 2, 3, 4, 5):
+            elif row["version"] in (1, 2, 3, 4, 5, 6):
                 # every step so far only adds tables (created above by the idempotent DDL)
                 self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:
