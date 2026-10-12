@@ -1,0 +1,721 @@
+PS C:\work\repo\rlab> .\.venv\Scripts\python.exe scripts\install_eas.py RL_Donchian RL_TSMom RL_BollingerMR
+copied Telemetry.mqh -> C:\MT5_verify\MQL5\Include\RobustLab
+RL_Donchian: Result: 0 errors, 0 warnings, 1350 ms elapsed, cpu='X64 Regular'
+RL_Donchian: OK -> C:\MT5_verify\MQL5\Experts\RobustLab\RL_Donchian.ex5
+RL_TSMom: Result: 0 errors, 0 warnings, 1000 ms elapsed, cpu='X64 Regular'
+RL_TSMom: OK -> C:\MT5_verify\MQL5\Experts\RobustLab\RL_TSMom.ex5
+RL_BollingerMR: Result: 0 errors, 0 warnings, 987 ms elapsed, cpu='X64 Regular'
+RL_BollingerMR: OK -> C:\MT5_verify\MQL5\Experts\RobustLab\RL_BollingerMR.ex5
+all compiled
+PS C:\work\repo\rlab> .\.venv\Scripts\python.exe scripts\run_pipeline.py configs\pipelines\classic_donchian_h4_v1.yaml configs\pipelines\classic_tsmom_h4_v1.yaml configs\pipelines\classic_bbmr_h4_v1.yaml
+# run_pipeline started 20261012T115421Z: configs\pipelines\classic_donchian_h4_v1.yaml, configs\pipelines\classic_tsmom_h4_v1.yaml, configs\pipelines\classic_bbmr_h4_v1.yaml
+
+# ===== pipeline classic_donchian_h4_v1 (configs\pipelines\classic_donchian_h4_v1.yaml) =====
+# request=configs/requests/classic_donchian_h4_v1_single.yaml study=configs/studies/classic_donchian_h4_v1.yaml profile=swing_trend seed=20261017
+
+## P1 single test
+
+$ rlab backtest run configs/requests/classic_donchian_h4_v1_single.yaml
+status: SUCCEEDED
+message:
+run_id: rn_54459f82753b1446
+job_id: jb_20261012115426372_3eb1a471
+attempt: 1
+strategy_version_id: sv_9b588d78f9a6e198
+candidate_id: cd_2c737ed63bc8994c
+deals: 185
+net_profit_mt5: -332.53
+net_profit_sum: -332.53
+observed_build: 6256
+deals_content_hash: b5852102ea903f71d3e81bb273928de62ab77eb5da7b8229f464d8d3484f96f0
+warnings:
+terminal_seconds: 11.114
+metric_checks: MATCH 15, NOT_COMPARABLE 1
+
+$ rlab metrics show rn_54459f82753b1446
+job: jb_20261012115426372_3eb1a471  metrics: m3
+-- comparison with MT5 --
+  MATCH          balance_max_dd             ours=1473.49 mt5=1473.49
+  NOT_COMPARABLE daily_sharpe               ours=-0.002894924331568379 mt5=-0.06
+  MATCH          equity_max_dd              ours=2222.09 mt5=2222.09
+  MATCH          expected_payoff            ours=-3.6144565217391302 mt5=-3.61
+  MATCH          gross_loss                 ours=-9574.46 mt5=-9574.46
+  MATCH          gross_profit               ours=9241.93 mt5=9241.93
+  MATCH          loss_trades                ours=58 mt5=58.0
+  MATCH          max_consec_losses          ours=5 mt5=5.0
+  MATCH          max_consec_losses_amount   ours=-978.25 mt5=-978.25
+  MATCH          max_consec_wins            ours=3 mt5=3.0
+  MATCH          max_consec_wins_amount     ours=1312.26 mt5=1312.26
+  MATCH          net_profit                 ours=-332.53 mt5=-332.53
+  MATCH          profit_factor              ours=0.9652690595605391 mt5=0.97
+  MATCH          recovery_factor            ours=-0.1496474040205392 mt5=-0.15
+  MATCH          trades                     ours=92 mt5=92.0
+  MATCH          win_trades                 ours=34 mt5=34.0
+-- metrics --
+  avg_loss: -165.07689655172416
+  avg_win: 271.8214705882353
+  balance_max_dd: 1473.49
+  balance_max_dd_days: 1140.5
+  balance_max_dd_pct: 13.378348809105505
+  bankrupt: False
+  daily_kurtosis: 7.324473549475459
+  daily_mean_return: -2.132969852469534e-05
+  daily_sharpe: -0.002894924331568379
+  daily_skewness: 0.31928622131955664
+  daily_std_return: 0.007367964092221913
+  days: 1559
+  distinct_volumes: [0.1]
+  equity_max_dd: 2222.09
+  equity_max_dd_pct: 19.7891
+  equity_peak: 11388.43
+  expected_payoff: -3.6144565217391302
+  final_balance: 9667.47
+  fixed_lot: True
+  gross_loss: -9574.46
+  gross_profit: 9241.93
+  inout_deals: 0
+  loss_trades: 58
+  max_consec_losses: 5
+  max_consec_losses_amount: -978.25
+  max_consec_wins: 3
+  max_consec_wins_amount: 1312.26
+  max_floating_loss: -479.01
+  max_lots: 0.1
+  max_positions: 1
+  min_margin_level: 5432.23
+  net_profit: -332.53
+  profit_factor: 0.9652690595605391
+  recovery_factor: -0.1496474040205392
+  stop_out_deals: 0
+  trades: 92
+  win_rate: 0.3695652173913043
+  win_trades: 34
+-- by year --
+  2008: net=-354.67 trades=15 max_dd=1297.78
+  2009: net=-554.18 trades=16 max_dd=1300.24
+  2010: net=1486.66 trades=14 max_dd=520.68
+  2011: net=-408.21 trades=14 max_dd=1037.31
+  2012: net=-125.02 trades=16 max_dd=970.72
+  2013: net=-377.11 trades=17 max_dd=724.05
+
+## P3 optimization
+
+$ rlab optimize run configs/studies/classic_donchian_h4_v1.yaml
+status: SUCCEEDED
+round_id: or_25ce6951eeb72e84
+expected_passes: 25
+chunks: 1
+job jb_20261012115443741_69439f0f chunk=0 SUCCEEDED passes=25/25 build=6256 seconds=16.179
+
+$ rlab optimize show or_25ce6951eeb72e84
+round_id: or_25ce6951eeb72e84
+study_id: classic_donchian_h4_v1
+strategy_family: RL_Donchian
+symbol_timeframe: EURUSD H4
+period: [2008-01-02, 2014-01-01) broker server time
+param_space: [{"name":"InpEntryPeriod","type":"int","values":[30,60,90,120,150]},{"name":"InpExitPeriod","type":"int","values":[10,20,30,40,50]}]
+fixed: {"InpLots":"0.1"}
+expected_passes: 25
+trials_in_family: 25
+summary: passes_stored=25, chunks_succeeded=1/1, net_profit_min=-2552.75, net_profit_median=-8.74, net_profit_max=2534.13, share_profitable=0.44
+job jb_20261012115443741_69439f0f chunk=0 #1 SUCCEEDED passes=25/25 build=6256 daily_hash=3c76c6f52bd2ddf7 agents={'cache_hit': False, 'cloud': 0, 'finished_passes': 25, 'local': 25, 'remote': 0, 'started': True}
+
+## P4 filter
+
+$ rlab filter run or_25ce6951eeb72e84 --profile swing_trend
+status: DONE
+filter_id: fl_5267e411c566f264
+round_id: or_25ce6951eeb72e84
+profile: swing_trend
+profile_hash: 1800c9982d105095
+component: initial_filter f1
+candidates: 25
+passed: 0
+failed: 25
+filter_runs_on_this_round: 1
+reasons (a candidate can have several):
+  LOW_PSR: 25
+  NEGATIVE_EXPECTANCY: 14
+  warning TRADE_FREQUENCY_OUT_OF_PROFILE: 16
+conditions: deposit=10000.0 USD leverage=100 fixed={'InpLots': '0.1'} server=MetaQuotes-Demo (margin level is judged at these conditions)
+note: passing means 'may go on to robustness/statistics', not a forecast of profit; PSR does not correct for the number of trials (DSR does, P6)
+
+## P5 robustness
+
+$ rlab robust run or_25ce6951eeb72e84 --filter fl_5267e411c566f264
+status: DONE
+robust_id: rb_1ba3e7940df0712c
+round_id: or_25ce6951eeb72e84
+filter_id: fl_5267e411c566f264
+component: robustness g1
+score: daily_sharpe
+candidates: 25
+score_status: {'OK': 25}  (candidates whose own score is -inf, by cause)
+robust_score: {'min': -0.024963, 'p25': -0.010019, 'median': -0.004593, 'p75': -0.001142, 'max': 0.013844, 'n_finite': 25}
+peak_gap: {'median': -0.000781, 'p90': 0.007901, 'max': 0.016366}
+axis_sensitivity (median |score change| per step): {'InpEntryPeriod': 0.005151121329239103, 'InpExitPeriod': 0.007170074648226258}
+edge candidates (fewer than half the neighbours): 4
+regions: 0  reason: NO_FILTER_PASS
+region_status: {'NOT_FILTER_PASS': 25}
+positive_year_share: {'0.16666666666666666': 2, '0.3333333333333333': 8, '0.5': 15}  (share of calendar years in profit)
+note: values only, no pass/fail (P7 decides); every candidate is evaluated whether it passed P4 or not
+
+$ rlab robust map rb_1ba3e7940df0712c --metric score
+score map: columns InpEntryPeriod 30..150, rows InpExitPeriod 10..50
+    50 |+-:%@
+    40 |+*#@@
+    30 |+-=%%
+    20 |*.:=#
+    10 |  .:*
+       +-----
+legend: ' .:-=+*#%@' = rank of the value among finite candidates (low -> high); _ no trades, B bankruptcy, S stop-out, ? not computable, x robust score -inf because of neighbours, R in a region / P isolated P4 pass
+
+$ rlab robust map rb_1ba3e7940df0712c --metric robust
+robust map: columns InpEntryPeriod 30..150, rows InpExitPeriod 10..50
+    50 |===%@
+    40 |###%@
+    30 |###%@
+    20 |.::-%
+    10 | .::-
+       +-----
+legend: ' .:-=+*#%@' = rank of the value among finite candidates (low -> high); _ no trades, B bankruptcy, S stop-out, ? not computable, x robust score -inf because of neighbours, R in a region / P isolated P4 pass
+
+## P6 statistics
+
+$ rlab stats run or_25ce6951eeb72e84 --filter fl_5267e411c566f264 --seed 20261017
+status: DONE
+stat_id: st_7d466c8a7158f405
+round_id: or_25ce6951eeb72e84
+filter_id: fl_5267e411c566f264
+strategy_family: RL_Donchian
+component: statistics dsr1+bs1
+sample_role: DISCOVERY_IN_SAMPLE
+period: [2008-01-02, 2014-01-01)
+candidates: 25
+N (family, distinct requested configurations): 25  [round: 25, trial ledger sum: 25]
+V[SR] (family): 0.0001345871692180768  from 25 distinct (config, period) results  [round: 0.0001345871692180768 from 25]
+excluded from V (still counted in N): {'family': {}, 'round': {}}
+SR0: 0.023169277412816214  [round scope: 0.023169277412816214]
+N_eff (participation ratio, reference only): 1.7240124333454683
+DSR standard: {'n': 25, 'max': 0.477568, 'median': 0.179628, '>=0.95': 0}
+DSR conservative (min of standard / AR(1) / Newey-West / bootstrap SE): {'n': 25, 'max': 0.477568, 'median': 0.179628, '>=0.95': 0}
+SERIAL_DEPENDENCE_HIGH candidates: 0
+top by conservative DSR:
+  cd_410d5af26630b3af conservative=0.477568 standard=0.4775680436597749 ar1=0.4780373790156299 nw=0.4775680436597749 rho1=0.021149435356237006 n*=1494.421851927341
+  cd_36f7aa3619f4243b conservative=0.466787 standard=0.46678694320892056 ar1=0.4674967574477276 nw=0.46678694320892056 rho1=0.021634675815784772 n*=1492.9715841773361
+  cd_b53f87cb831e4b59 conservative=0.377114 standard=0.37711437372293655 ar1=0.380947335150544 nw=0.37711437372293655 rho1=0.03267618223232563 n*=1460.3395118882775
+  cd_e41670954f6c710e conservative=0.356303 standard=0.3563026694608372 ar1=0.3604585735086546 nw=0.3563026694608372 rho1=0.030639833481293337 n*=1466.3051538557609
+  cd_0d7a0c5b9bf498c2 conservative=0.307555 standard=0.307554828082006 ar1=0.3200160190755468 nw=0.30810649982583643 rho1=0.07227404567464958 n*=1348.8387307586352
+bootstrap: B=2000 seed=20261017 arch 8.0.0 (stationary main, circular sensitivity, percentile 90%)
+  no bootstrap targets (no P4 pass, no P5 medoid, none requested with --candidate)
+known limitations:
+  - DSR assumes independent daily returns; the serial-dependence corrections reduce but do not remove the excess chance-pass rate.
+  - P6 validation (100 null strategies x 500 days, best selected, 2,000 repetitions): no variant met the pre-registered bound (95% upper limit <= 7%) under AR(2) 0.3/0.3 (conservative DSR 6.3%, upper 7.5%); the uncorrected DSR exceeds it whenever returns are autocorrelated (11-22%); Newey-West alone fails under MA(5). Other dependence forms may be worse. See docs/research/p6_validation/RESULTS.md.
+  - Corrections cost power (independent 93.5% -> AR(1) 0.2: 76%, AR(1) 0.4: 46%).
+  - A single huge winning day raises PSR/DSR through the skewness term (a property of the formula).
+  - Not a guarantee of safety: the final checks against chance passes are P8 (new period) and P10 (null-hypothesis test of the whole pipeline).
+note: DISCOVERY_IN_SAMPLE: values come from the period the candidates were selected in. DSR corrects for selection among the trials; it is not out-of-sample evidence. Intervals are the sampling error of this period, not forecasts. DSR is used for warnings and ranking only, never as a pass/fail on its own (C62).
+
+## P7 selection
+
+$ rlab select run or_25ce6951eeb72e84 --filter fl_5267e411c566f264 --robust rb_1ba3e7940df0712c --stats st_7d466c8a7158f405
+status: DONE
+message: NO_ELIGIBLE: no candidate passed P4
+sel_id: sl_fd53d8f4675eae07
+round_id: or_25ce6951eeb72e84
+filter_id: fl_5267e411c566f264
+robust_id: rb_1ba3e7940df0712c
+stat_id: st_7d466c8a7158f405
+selector: region_pareto_v1 s1
+profile: default 0440bcd766771468
+budget: 5
+candidates: 25  P4 pass (eligible): 0  gate pass: 0  region representatives: 0  selected: 0
+outcome_reason: NO_ELIGIBLE: no candidate passed P4
+outcomes: {}
+reasons: {}
+warnings: {}
+selected (integrated rank order):
+  none
+known limitations:
+  - P7 cannot tell a smooth chance mound (neighbouring passes that look alike by chance) from a real plateau. In the P7 benchmark with NO edge, at least one candidate was selected in 72.8% (95% CI 68.7-76.7%, mean 1.09 selected) of grids (noise only) and 73.0% (68.9-76.9%, mean 1.12) (noise + isolated spikes); see docs/research/p7_validation/RESULTS.md.
+  - Being selected is not evidence of an edge. Selection only narrows the candidates for P8 (new periods, fixed parameters) and P10 (null-hypothesis test of the whole pipeline).
+  - All inputs are DISCOVERY_IN_SAMPLE values; DSR is used for relative ranking only (C62) and inherits the P6 known limitations.
+note: DISCOVERY_IN_SAMPLE selection: the candidates were chosen with values from the period they were optimized in. Being selected is not evidence of an edge; P8 and P10 are the checks against chance.
+
+# ids (classic_donchian_h4_v1): round=or_25ce6951eeb72e84 filter=fl_5267e411c566f264 robust=rb_1ba3e7940df0712c stats=st_7d466c8a7158f405 selection=sl_fd53d8f4675eae07 selected=0
+# P8a / P8b / P9 are NOT run by this script (they need a decision after P7).
+
+# ===== pipeline classic_tsmom_h4_v1 (configs\pipelines\classic_tsmom_h4_v1.yaml) =====
+# request=configs/requests/classic_tsmom_h4_v1_single.yaml study=configs/studies/classic_tsmom_h4_v1.yaml profile=swing_trend seed=20261018
+
+## P1 single test
+
+$ rlab backtest run configs/requests/classic_tsmom_h4_v1_single.yaml
+status: SUCCEEDED
+message:
+run_id: rn_042d34b5f3848a52
+job_id: jb_20261012115520037_5ae7e52a
+attempt: 1
+strategy_version_id: sv_917299d4d097e0ae
+candidate_id: cd_ea522c7d5eb981ba
+deals: 205
+net_profit_mt5: 2338.1
+net_profit_sum: 2338.10
+observed_build: 6256
+deals_content_hash: 6ab9a9c4d0830562266f421a9171433eb403fc20bcb09f895b6bd0afc1ba812a
+warnings:
+terminal_seconds: 11.083
+metric_checks: MATCH 15, NOT_COMPARABLE 1
+
+$ rlab metrics show rn_042d34b5f3848a52
+job: jb_20261012115520037_5ae7e52a  metrics: m3
+-- comparison with MT5 --
+  MATCH          balance_max_dd             ours=2999.78 mt5=2999.78
+  NOT_COMPARABLE daily_sharpe               ours=0.015486660407166003 mt5=0.27
+  MATCH          equity_max_dd              ours=3898.62 mt5=3898.62
+  MATCH          expected_payoff            ours=22.922549019607843 mt5=22.92
+  MATCH          gross_loss                 ours=-11576.56 mt5=-11576.56
+  MATCH          gross_profit               ours=13914.66 mt5=13914.66
+  MATCH          loss_trades                ours=65 mt5=65.0
+  MATCH          max_consec_losses          ours=9 mt5=9.0
+  MATCH          max_consec_losses_amount   ours=-1298.96 mt5=-1298.96
+  MATCH          max_consec_wins            ours=3 mt5=3.0
+  MATCH          max_consec_wins_amount     ours=1951.18 mt5=1951.18
+  MATCH          net_profit                 ours=2338.1 mt5=2338.1
+  MATCH          profit_factor              ours=1.2019684604062002 mt5=1.2
+  MATCH          recovery_factor            ours=0.5997250309083727 mt5=0.6
+  MATCH          trades                     ours=102 mt5=102.0
+  MATCH          win_trades                 ours=37 mt5=37.0
+-- metrics --
+  avg_loss: -178.10092307692307
+  avg_win: 376.0718918918919
+  balance_max_dd: 2999.78
+  balance_max_dd_days: 960.4583217592592
+  balance_max_dd_pct: 19.866882127766665
+  bankrupt: False
+  daily_kurtosis: 4.457386508793577
+  daily_mean_return: 0.00014997434252726112
+  daily_sharpe: 0.015486660407166003
+  daily_skewness: 0.032495824441327245
+  daily_std_return: 0.009684098352015573
+  days: 1559
+  distinct_volumes: [0.1]
+  equity_max_dd: 3898.62
+  equity_max_dd_pct: 24.4553
+  equity_peak: 15941.84
+  expected_payoff: 22.922549019607843
+  final_balance: 12338.1
+  fixed_lot: True
+  gross_loss: -11576.56
+  gross_profit: 13914.66
+  inout_deals: 0
+  loss_trades: 65
+  max_consec_losses: 9
+  max_consec_losses_amount: -1298.96
+  max_consec_wins: 3
+  max_consec_wins_amount: 1951.18
+  max_floating_loss: -794.49
+  max_lots: 0.1
+  max_positions: 1
+  min_margin_level: 5592.21
+  net_profit: 2338.1
+  profit_factor: 1.2019684604062002
+  recovery_factor: 0.5997250309083727
+  stop_out_deals: 0
+  trades: 102
+  win_rate: 0.3627450980392157
+  win_trades: 37
+-- by year --
+  2008: net=280.61 trades=21 max_dd=1161.3
+  2009: net=2673.31 trades=13 max_dd=402.17
+  2010: net=1968.49 trades=15 max_dd=566.02
+  2011: net=-1789.62 trades=21 max_dd=2351.79
+  2012: net=-724.3 trades=19 max_dd=1298.96
+  2013: net=-70.39 trades=13 max_dd=492.86
+
+## P3 optimization
+
+$ rlab optimize run configs/studies/classic_tsmom_h4_v1.yaml
+status: SUCCEEDED
+round_id: or_b4262d7847f547f6
+expected_passes: 25
+chunks: 1
+job jb_20261012115536692_2d12d1d4 chunk=0 SUCCEEDED passes=25/25 build=6256 seconds=19.232
+
+$ rlab optimize show or_b4262d7847f547f6
+round_id: or_b4262d7847f547f6
+study_id: classic_tsmom_h4_v1
+strategy_family: RL_TSMom
+symbol_timeframe: EURUSD H4
+period: [2008-01-02, 2014-01-01) broker server time
+param_space: [{"name":"InpLookback","type":"int","values":[30,60,90,120,150]},{"name":"InpHoldBars","type":"int","values":[6,12,18,24,30]}]
+fixed: {"InpLots":"0.1"}
+expected_passes: 25
+trials_in_family: 25
+summary: passes_stored=25, chunks_succeeded=1/1, net_profit_min=-1474.69, net_profit_median=1387.1, net_profit_max=4106.79, share_profitable=0.8
+job jb_20261012115536692_2d12d1d4 chunk=0 #1 SUCCEEDED passes=25/25 build=6256 daily_hash=d0a0e7b46ab2093f agents={'cache_hit': False, 'cloud': 0, 'finished_passes': 25, 'local': 25, 'remote': 0, 'started': True}
+
+## P4 filter
+
+$ rlab filter run or_b4262d7847f547f6 --profile swing_trend
+status: DONE
+filter_id: fl_d28c80f847678eb2
+round_id: or_b4262d7847f547f6
+profile: swing_trend
+profile_hash: 1800c9982d105095
+component: initial_filter f1
+candidates: 25
+passed: 0
+failed: 25
+filter_runs_on_this_round: 1
+reasons (a candidate can have several):
+  LOW_PSR: 25
+  NEGATIVE_EXPECTANCY: 5
+  warning TRADE_FREQUENCY_OUT_OF_PROFILE: 14
+conditions: deposit=10000.0 USD leverage=100 fixed={'InpLots': '0.1'} server=MetaQuotes-Demo (margin level is judged at these conditions)
+note: passing means 'may go on to robustness/statistics', not a forecast of profit; PSR does not correct for the number of trials (DSR does, P6)
+
+## P5 robustness
+
+$ rlab robust run or_b4262d7847f547f6 --filter fl_d28c80f847678eb2
+status: DONE
+robust_id: rb_3da046f166a26226
+round_id: or_b4262d7847f547f6
+filter_id: fl_d28c80f847678eb2
+component: robustness g1
+score: daily_sharpe
+candidates: 25
+score_status: {'OK': 25}  (candidates whose own score is -inf, by cause)
+robust_score: {'min': -0.009884, 'p25': 0.001655, 'median': 0.00631, 'p75': 0.007913, 'max': 0.018295, 'n_finite': 25}
+peak_gap: {'median': -0.002384, 'p90': 0.014075, 'max': 0.017541}
+axis_sensitivity (median |score change| per step): {'InpLookback': 0.007244863911870313, 'InpHoldBars': 0.009085217122538385}
+edge candidates (fewer than half the neighbours): 4
+regions: 0  reason: NO_FILTER_PASS
+region_status: {'NOT_FILTER_PASS': 25}
+positive_year_share: {'0.3333333333333333': 6, '0.5': 11, '0.6666666666666666': 7, '0.8333333333333334': 1}  (share of calendar years in profit)
+note: values only, no pass/fail (P7 decides); every candidate is evaluated whether it passed P4 or not
+
+$ rlab robust map rb_3da046f166a26226 --metric score
+score map: columns InpLookback 30..150, rows InpHoldBars 6..30
+    30 | ::-.
+    24 |=*+*%
+    18 |@*#=+
+    12 | @=@%
+     6 |.-:%#
+       +-----
+legend: ' .:-=+*#%@' = rank of the value among finite candidates (low -> high); _ no trades, B bankruptcy, S stop-out, ? not computable, x robust score -inf because of neighbours, R in a region / P isolated P4 pass
+
+$ rlab robust map rb_3da046f166a26226 --metric robust
+robust map: columns InpLookback 30..150, rows InpHoldBars 6..30
+    30 | -=-.
+    24 |==***
+    18 |##%%@
+    12 |::*%@
+     6 | :=*@
+       +-----
+legend: ' .:-=+*#%@' = rank of the value among finite candidates (low -> high); _ no trades, B bankruptcy, S stop-out, ? not computable, x robust score -inf because of neighbours, R in a region / P isolated P4 pass
+
+## P6 statistics
+
+$ rlab stats run or_b4262d7847f547f6 --filter fl_d28c80f847678eb2 --seed 20261018
+status: DONE
+stat_id: st_eb79f63a03defa54
+round_id: or_b4262d7847f547f6
+filter_id: fl_d28c80f847678eb2
+strategy_family: RL_TSMom
+component: statistics dsr1+bs1
+sample_role: DISCOVERY_IN_SAMPLE
+period: [2008-01-02, 2014-01-01)
+candidates: 25
+N (family, distinct requested configurations): 25  [round: 25, trial ledger sum: 25]
+V[SR] (family): 0.000110463527585281  from 25 distinct (config, period) results  [round: 0.000110463527585281 from 25]
+excluded from V (still counted in N): {'family': {}, 'round': {}}
+SR0: 0.020990370976104768  [round scope: 0.020990370976104768]
+N_eff (participation ratio, reference only): 2.7851557696547986
+DSR standard: {'n': 25, 'max': 0.595416, 'median': 0.321128, '>=0.95': 0}
+DSR conservative (min of standard / AR(1) / Newey-West / bootstrap SE): {'n': 25, 'max': 0.595416, 'median': 0.321128, '>=0.95': 0}
+SERIAL_DEPENDENCE_HIGH candidates: 0
+top by conservative DSR:
+  cd_190eb15a15f3b0d8 conservative=0.595416 standard=0.5954163417852094 ar1=0.5954163417852094 nw=0.5954163417852094 rho1=-0.008586161340864713 n*=1559.0
+  cd_8616f27bad2fd59b conservative=0.560505 standard=0.5605049463292852 ar1=0.5605049463292852 nw=0.5605049463292852 rho1=-0.00443095806740733 n*=1559.0
+  cd_ffb21b6519cff521 conservative=0.544224 standard=0.5442236137535603 ar1=0.5442236137535603 nw=0.5442236137535603 rho1=-0.027386143568127897 n*=1559.0
+  cd_df70d9e73d14c924 conservative=0.543613 standard=0.5439470113737782 ar1=0.5436133498918937 nw=0.5439470113737782 rho1=0.007647024709867388 n*=1535.3375244895585
+  cd_c131b44ace11b213 conservative=0.515463 standard=0.5156883580382358 ar1=0.515463008500145 nw=0.5156883580382358 rho1=0.014465215233063511 n*=1514.5405740685449
+bootstrap: B=2000 seed=20261018 arch 8.0.0 (stationary main, circular sensitivity, percentile 90%)
+  no bootstrap targets (no P4 pass, no P5 medoid, none requested with --candidate)
+known limitations:
+  - DSR assumes independent daily returns; the serial-dependence corrections reduce but do not remove the excess chance-pass rate.
+  - P6 validation (100 null strategies x 500 days, best selected, 2,000 repetitions): no variant met the pre-registered bound (95% upper limit <= 7%) under AR(2) 0.3/0.3 (conservative DSR 6.3%, upper 7.5%); the uncorrected DSR exceeds it whenever returns are autocorrelated (11-22%); Newey-West alone fails under MA(5). Other dependence forms may be worse. See docs/research/p6_validation/RESULTS.md.
+  - Corrections cost power (independent 93.5% -> AR(1) 0.2: 76%, AR(1) 0.4: 46%).
+  - A single huge winning day raises PSR/DSR through the skewness term (a property of the formula).
+  - Not a guarantee of safety: the final checks against chance passes are P8 (new period) and P10 (null-hypothesis test of the whole pipeline).
+note: DISCOVERY_IN_SAMPLE: values come from the period the candidates were selected in. DSR corrects for selection among the trials; it is not out-of-sample evidence. Intervals are the sampling error of this period, not forecasts. DSR is used for warnings and ranking only, never as a pass/fail on its own (C62).
+
+## P7 selection
+
+$ rlab select run or_b4262d7847f547f6 --filter fl_d28c80f847678eb2 --robust rb_3da046f166a26226 --stats st_eb79f63a03defa54
+status: DONE
+message: NO_ELIGIBLE: no candidate passed P4
+sel_id: sl_96ec8dc92e11cb14
+round_id: or_b4262d7847f547f6
+filter_id: fl_d28c80f847678eb2
+robust_id: rb_3da046f166a26226
+stat_id: st_eb79f63a03defa54
+selector: region_pareto_v1 s1
+profile: default 0440bcd766771468
+budget: 5
+candidates: 25  P4 pass (eligible): 0  gate pass: 0  region representatives: 0  selected: 0
+outcome_reason: NO_ELIGIBLE: no candidate passed P4
+outcomes: {}
+reasons: {}
+warnings: {}
+selected (integrated rank order):
+  none
+known limitations:
+  - P7 cannot tell a smooth chance mound (neighbouring passes that look alike by chance) from a real plateau. In the P7 benchmark with NO edge, at least one candidate was selected in 72.8% (95% CI 68.7-76.7%, mean 1.09 selected) of grids (noise only) and 73.0% (68.9-76.9%, mean 1.12) (noise + isolated spikes); see docs/research/p7_validation/RESULTS.md.
+  - Being selected is not evidence of an edge. Selection only narrows the candidates for P8 (new periods, fixed parameters) and P10 (null-hypothesis test of the whole pipeline).
+  - All inputs are DISCOVERY_IN_SAMPLE values; DSR is used for relative ranking only (C62) and inherits the P6 known limitations.
+note: DISCOVERY_IN_SAMPLE selection: the candidates were chosen with values from the period they were optimized in. Being selected is not evidence of an edge; P8 and P10 are the checks against chance.
+
+# ids (classic_tsmom_h4_v1): round=or_b4262d7847f547f6 filter=fl_d28c80f847678eb2 robust=rb_3da046f166a26226 stats=st_eb79f63a03defa54 selection=sl_96ec8dc92e11cb14 selected=0
+# P8a / P8b / P9 are NOT run by this script (they need a decision after P7).
+
+# ===== pipeline classic_bbmr_h4_v1 (configs\pipelines\classic_bbmr_h4_v1.yaml) =====
+# request=configs/requests/classic_bbmr_h4_v1_single.yaml study=configs/studies/classic_bbmr_h4_v1.yaml profile=mean_reversion seed=20261019
+
+## P1 single test
+
+$ rlab backtest run configs/requests/classic_bbmr_h4_v1_single.yaml
+status: SUCCEEDED
+message:
+run_id: rn_76c74f1f7705c2bb
+job_id: jb_20261012115615500_f21c5581
+attempt: 1
+strategy_version_id: sv_098947064f0dde79
+candidate_id: cd_db31946173aa8a71
+deals: 307
+net_profit_mt5: -598.65
+net_profit_sum: -598.65
+observed_build: 6256
+deals_content_hash: 3f1a2c889def6a98f58f70fa0b5f19125829a3abde3eab09c3282654d34de7a0
+warnings:
+terminal_seconds: 10.086
+metric_checks: MATCH 15, NOT_COMPARABLE 1
+
+$ rlab metrics show rn_76c74f1f7705c2bb
+job: jb_20261012115615500_f21c5581  metrics: m3
+-- comparison with MT5 --
+  MATCH          balance_max_dd             ours=1856.92 mt5=1856.92
+  NOT_COMPARABLE daily_sharpe               ours=-0.006132911702571319 mt5=-0.16
+  MATCH          equity_max_dd              ours=1991.89 mt5=1991.89
+  MATCH          expected_payoff            ours=-3.9127450980392147 mt5=-3.91
+  MATCH          gross_loss                 ours=-11490.14 mt5=-11490.14
+  MATCH          gross_profit               ours=10891.49 mt5=10891.49
+  MATCH          loss_trades                ours=61 mt5=61.0
+  MATCH          max_consec_losses          ours=4 mt5=4.0
+  MATCH          max_consec_losses_amount   ours=-459.69 mt5=-459.69
+  MATCH          max_consec_wins            ours=6 mt5=6.0
+  MATCH          max_consec_wins_amount     ours=403.96 mt5=403.96
+  MATCH          net_profit                 ours=-598.65 mt5=-598.65
+  MATCH          profit_factor              ours=0.9478988071511749 mt5=0.95
+  MATCH          recovery_factor            ours=-0.3005437047226503 mt5=-0.3
+  MATCH          trades                     ours=153 mt5=153.0
+  MATCH          win_trades                 ours=92 mt5=92.0
+-- metrics --
+  avg_loss: -188.3629508196721
+  avg_win: 118.38576086956522
+  balance_max_dd: 1856.92
+  balance_max_dd_days: 1278.9583217592592
+  balance_max_dd_pct: 16.534954190771916
+  bankrupt: False
+  daily_kurtosis: 11.467986677715322
+  daily_mean_return: -3.839961513790893e-05
+  daily_sharpe: -0.006132911702571319
+  daily_skewness: -0.24260042085004793
+  daily_std_return: 0.006261237239370215
+  days: 1559
+  distinct_volumes: [0.1]
+  equity_max_dd: 1991.89
+  equity_max_dd_pct: 17.6519
+  equity_peak: 11284.29
+  expected_payoff: -3.9127450980392147
+  final_balance: 9401.35
+  fixed_lot: True
+  gross_loss: -11490.14
+  gross_profit: 10891.49
+  inout_deals: 0
+  loss_trades: 61
+  max_consec_losses: 4
+  max_consec_losses_amount: -459.69
+  max_consec_wins: 6
+  max_consec_wins_amount: 403.96
+  max_floating_loss: -1851.2
+  max_lots: 0.1
+  max_positions: 1
+  min_margin_level: 5898.53
+  net_profit: -598.65
+  profit_factor: 0.9478988071511749
+  recovery_factor: -0.3005437047226503
+  stop_out_deals: 0
+  trades: 153
+  win_rate: 0.6013071895424836
+  win_trades: 92
+-- by year --
+  2008: net=-343.26 trades=30 max_dd=1057.3
+  2009: net=948.63 trades=26 max_dd=601.29
+  2010: net=174.86 trades=22 max_dd=1028.84
+  2011: net=-499.89 trades=28 max_dd=1004.82
+  2012: net=-530.7 trades=20 max_dd=650.58
+  2013: net=-348.29 trades=27 max_dd=763.73
+
+## P3 optimization
+
+$ rlab optimize run configs/studies/classic_bbmr_h4_v1.yaml
+status: SUCCEEDED
+round_id: or_e325ec2a11b9f55e
+expected_passes: 25
+chunks: 1
+job jb_20261012115631206_4699a4ec chunk=0 SUCCEEDED passes=25/25 build=6256 seconds=14.152
+
+$ rlab optimize show or_e325ec2a11b9f55e
+round_id: or_e325ec2a11b9f55e
+study_id: classic_bbmr_h4_v1
+strategy_family: RL_BollingerMR
+symbol_timeframe: EURUSD H4
+period: [2008-01-02, 2014-01-01) broker server time
+param_space: [{"name":"InpPeriod","type":"int","values":[10,20,30,40,50]},{"name":"InpDeviation","type":"double","values":["1.5","2","2.5","3","3.5"]}]
+fixed: {"InpLots":"0.1"}
+expected_passes: 25
+trials_in_family: 25
+summary: passes_stored=25, chunks_succeeded=1/1, net_profit_min=-4098.31, net_profit_median=-962.59, net_profit_max=266.56, share_profitable=0.12
+job jb_20261012115631206_4699a4ec chunk=0 #1 SUCCEEDED passes=25/25 build=6256 daily_hash=87088329d7a9243a agents={'cache_hit': False, 'cloud': 0, 'finished_passes': 25, 'local': 25, 'remote': 0, 'started': True}
+
+## P4 filter
+
+$ rlab filter run or_e325ec2a11b9f55e --profile mean_reversion
+status: DONE
+filter_id: fl_65e738f4b6a88607
+round_id: or_e325ec2a11b9f55e
+profile: mean_reversion
+profile_hash: c66a58152535b5c3
+component: initial_filter f1
+candidates: 25
+passed: 0
+failed: 25
+filter_runs_on_this_round: 1
+reasons (a candidate can have several):
+  LOW_PSR: 25
+  NEGATIVE_EXPECTANCY: 22
+  INSUFFICIENT_TRADES: 6
+  warning TRADE_FREQUENCY_OUT_OF_PROFILE: 20
+conditions: deposit=10000.0 USD leverage=100 fixed={'InpLots': '0.1'} server=MetaQuotes-Demo (margin level is judged at these conditions)
+note: passing means 'may go on to robustness/statistics', not a forecast of profit; PSR does not correct for the number of trials (DSR does, P6)
+
+## P5 robustness
+
+$ rlab robust run or_e325ec2a11b9f55e --filter fl_65e738f4b6a88607
+status: DONE
+robust_id: rb_18b92a1c68147592
+round_id: or_e325ec2a11b9f55e
+filter_id: fl_65e738f4b6a88607
+component: robustness g1
+score: daily_sharpe
+candidates: 25
+score_status: {'NO_TRADES': 2, 'OK': 23}  (candidates whose own score is -inf, by cause)
+robust_score: {'min': -0.058055, 'p25': -0.040398, 'median': -0.030469, 'p75': -0.023615, 'max': -0.008199, 'n_finite': 22}
+peak_gap: {'median': 0.00746, 'p90': 0.028594, 'max': 0.041637}
+axis_sensitivity (median |score change| per step): {'InpPeriod': 0.019791234831688966, 'InpDeviation': 0.012889000423309784}
+edge candidates (fewer than half the neighbours): 4
+regions: 0  reason: NO_FILTER_PASS
+region_status: {'NOT_FILTER_PASS': 25}
+positive_year_share: {'0.0': 3, '0.16666666666666666': 5, '0.3333333333333333': 7, '0.5': 8, '0.6666666666666666': 2}  (share of calendar years in profit)
+note: values only, no pass/fail (P7 decides); every candidate is evaluated whether it passed P4 or not
+
+$ rlab robust map rb_18b92a1c68147592 --metric score
+score map: columns InpPeriod 10..50, rows InpDeviation 1.5..3.5
+   3.5 |_- =+
+     3 |_- @.
+   2.5 |@*#:.
+     2 |=%@*+
+   1.5 |*-#%:
+       +-----
+legend: ' .:-=+*#%@' = rank of the value among finite candidates (low -> high); _ no trades, B bankruptcy, S stop-out, ? not computable, x robust score -inf because of neighbours, R in a region / P isolated P4 pass
+
+$ rlab robust map rb_18b92a1c68147592 --metric robust
+robust map: columns InpPeriod 10..50, rows InpDeviation 1.5..3.5
+   3.5 |_x..-
+     3 |_ =.-
+   2.5 |***--
+     2 |%@@+=
+   1.5 |#%@%+
+       +-----
+legend: ' .:-=+*#%@' = rank of the value among finite candidates (low -> high); _ no trades, B bankruptcy, S stop-out, ? not computable, x robust score -inf because of neighbours, R in a region / P isolated P4 pass
+
+## P6 statistics
+
+$ rlab stats run or_e325ec2a11b9f55e --filter fl_65e738f4b6a88607 --seed 20261019
+status: DONE
+stat_id: st_d50d22564bf6925f
+round_id: or_e325ec2a11b9f55e
+filter_id: fl_65e738f4b6a88607
+strategy_family: RL_BollingerMR
+component: statistics dsr1+bs1
+sample_role: DISCOVERY_IN_SAMPLE
+period: [2008-01-02, 2014-01-01)
+candidates: 25
+N (family, distinct requested configurations): 25  [round: 25, trial ledger sum: 25]
+V[SR] (family): 0.0003164162434547451  from 23 distinct (config, period) results  [round: 0.0003164162434547451 from 23]
+excluded from V (still counted in N): {'family': {'NO_TRADES': 2}, 'round': {'NO_TRADES': 2}}
+SR0: 0.03552548742113015  [round scope: 0.03552548742113015]
+N_eff (participation ratio, reference only): 3.7208015153567646
+DSR standard: {'n': 23, 'max': 0.114776, 'median': 0.010112, '>=0.95': 0}
+DSR conservative (min of standard / AR(1) / Newey-West / bootstrap SE): {'n': 23, 'max': 0.114776, 'median': 0.010112, '>=0.95': 0}
+SERIAL_DEPENDENCE_HIGH candidates: 0
+top by conservative DSR:
+  cd_b9b29bb5fadaf5a3 conservative=0.114776 standard=0.11477595901697968 ar1=0.11477595901697968 nw=0.11477595901697968 rho1=-0.018668586479394164 n*=1559.0
+  cd_a4e9f201f23bdb9e conservative=0.088008 standard=0.0880078133419328 ar1=0.0880078133419328 nw=0.0880078133419328 rho1=-0.03472500122325308 n*=1559.0
+  cd_6e2ea8e981271d18 conservative=0.083682 standard=0.08368170189778867 ar1=0.08669743686665676 nw=0.08942241064831946 rho1=0.014102901455866545 n*=1515.6386737714058
+  cd_b31aad6f6aae318f conservative=0.071164 standard=0.07116416170816474 ar1=0.07417228522312146 nw=0.0722782896295185 rho1=0.01493972179582884 n*=1513.1036264922488
+  cd_f2dfb42997792de0 conservative=0.059226 standard=0.0592261958843856 ar1=0.06102556512258128 nw=0.06262364387735353 rho1=0.009699738195953525 n*=1529.046754940216
+bootstrap: B=2000 seed=20261019 arch 8.0.0 (stationary main, circular sensitivity, percentile 90%)
+  no bootstrap targets (no P4 pass, no P5 medoid, none requested with --candidate)
+known limitations:
+  - DSR assumes independent daily returns; the serial-dependence corrections reduce but do not remove the excess chance-pass rate.
+  - P6 validation (100 null strategies x 500 days, best selected, 2,000 repetitions): no variant met the pre-registered bound (95% upper limit <= 7%) under AR(2) 0.3/0.3 (conservative DSR 6.3%, upper 7.5%); the uncorrected DSR exceeds it whenever returns are autocorrelated (11-22%); Newey-West alone fails under MA(5). Other dependence forms may be worse. See docs/research/p6_validation/RESULTS.md.
+  - Corrections cost power (independent 93.5% -> AR(1) 0.2: 76%, AR(1) 0.4: 46%).
+  - A single huge winning day raises PSR/DSR through the skewness term (a property of the formula).
+  - Not a guarantee of safety: the final checks against chance passes are P8 (new period) and P10 (null-hypothesis test of the whole pipeline).
+note: DISCOVERY_IN_SAMPLE: values come from the period the candidates were selected in. DSR corrects for selection among the trials; it is not out-of-sample evidence. Intervals are the sampling error of this period, not forecasts. DSR is used for warnings and ranking only, never as a pass/fail on its own (C62).
+
+## P7 selection
+
+$ rlab select run or_e325ec2a11b9f55e --filter fl_65e738f4b6a88607 --robust rb_18b92a1c68147592 --stats st_d50d22564bf6925f
+status: DONE
+message: NO_ELIGIBLE: no candidate passed P4
+sel_id: sl_7ebf954caf441053
+round_id: or_e325ec2a11b9f55e
+filter_id: fl_65e738f4b6a88607
+robust_id: rb_18b92a1c68147592
+stat_id: st_d50d22564bf6925f
+selector: region_pareto_v1 s1
+profile: default 0440bcd766771468
+budget: 5
+candidates: 25  P4 pass (eligible): 0  gate pass: 0  region representatives: 0  selected: 0
+outcome_reason: NO_ELIGIBLE: no candidate passed P4
+outcomes: {}
+reasons: {}
+warnings: {}
+selected (integrated rank order):
+  none
+known limitations:
+  - P7 cannot tell a smooth chance mound (neighbouring passes that look alike by chance) from a real plateau. In the P7 benchmark with NO edge, at least one candidate was selected in 72.8% (95% CI 68.7-76.7%, mean 1.09 selected) of grids (noise only) and 73.0% (68.9-76.9%, mean 1.12) (noise + isolated spikes); see docs/research/p7_validation/RESULTS.md.
+  - Being selected is not evidence of an edge. Selection only narrows the candidates for P8 (new periods, fixed parameters) and P10 (null-hypothesis test of the whole pipeline).
+  - All inputs are DISCOVERY_IN_SAMPLE values; DSR is used for relative ranking only (C62) and inherits the P6 known limitations.
+note: DISCOVERY_IN_SAMPLE selection: the candidates were chosen with values from the period they were optimized in. Being selected is not evidence of an edge; P8 and P10 are the checks against chance.
+
+# ids (classic_bbmr_h4_v1): round=or_e325ec2a11b9f55e filter=fl_65e738f4b6a88607 robust=rb_18b92a1c68147592 stats=st_d50d22564bf6925f selection=sl_7ebf954caf441053 selected=0
+# P8a / P8b / P9 are NOT run by this script (they need a decision after P7).
+
+# summary: classic_donchian_h4_v1=DONE, classic_tsmom_h4_v1=DONE, classic_bbmr_h4_v1=DONE
+# output saved to runs\batch3_20261012T115421Z.txt
+PS C:\work\repo\rlab>
