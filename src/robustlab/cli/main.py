@@ -1287,16 +1287,61 @@ def _studya_print(s: dict) -> None:
 
 
 @studya_app.command("calibrate")
-def studya_calibrate(config: Path = STUDYA_CFG) -> None:
-    """Fix the edge strengths (SPEC §4.3) before any measurement; refuses to overwrite."""
+def studya_calibrate(config: Path = STUDYA_CFG,
+                     provisional_out: Path | None = typer.Option(
+                         None, "--provisional-out", help="Write a provisional copy here (no fidelity gate; never "
+                                                         "used by a measurement)")) -> None:
+    """Fix the edge strengths (SPEC §4.3, §12.4: 40 worlds, per-world Sharpe) after the fidelity check matched;
+    refuses to overwrite."""
     from robustlab.studya import run as R
 
-    out, h = R.calibration(config, lambda s: typer.echo(f"  {s}", err=True))
-    typer.echo(f"calibration saved (sha256 {h[:16]})")
+    try:
+        out, h = R.calibration(config, lambda s: typer.echo(f"  {s}", err=True), out_path=provisional_out)
+    except (RuntimeError, FileExistsError) as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
+    typer.echo(f"calibration saved (sha256 {h[:16]}){' PROVISIONAL' if provisional_out else ''}")
     for name, res in out["edges"].items():
         for t, v in res.items():
-            typer.echo(f"{name} s={t}: scale {v['scale']:.6g} reference {v['reference_sharpe']:.4f} "
-                       f"best {v['max_cell']} {v['max_sharpe']:.4f}")
+            r = v["reference"]
+            typer.echo(f"{name} s={t}: scale {v['scale']:.6g}  reference mean {r['mean']:.4f} (target diff "
+                       f"{r['diff_from_target']:+.4f}, se {r['se_mean']:.4f}, median {r['median']:.4f}, sd {r['sd']:.4f}, "
+                       f"min {r['min']:.3f}, max {r['max']:.3f})  best {v['max_cell_by_mean']} {v['max_mean']:.4f}")
+
+
+@studya_app.command("price-check")
+def studya_price_check(config: Path = STUDYA_CFG) -> None:
+    """Price model verification (SPEC §12.5) -> results/price_model_check.json (re-run after the calibration)."""
+    from robustlab.studya import pricecheck as PC
+    from robustlab.studya import run as R
+
+    out = PC.run(config, progress=lambda s: typer.echo(f"  {s}", err=True))
+    h = PC.save(out, R.RESULTS / "price_model_check.json")
+    sp = out["s_paths"]
+    typer.echo(f"same draws as P10: {out['same_as_p10']}")
+    typer.echo(f"S paths: all positive, price {sp['price_min']['min']:.4f}-{sp['price_max']['max']:.4f}; arithmetic "
+               f"(P10-style) paths reaching 0: {sp['arithmetic_paths_reaching_0']}/{sp['rounds']}")
+    typer.echo(f"absolute width ratio multiplicative/arithmetic: {sp['absolute_width']['ratio_multiplicative_to_arithmetic']}")
+    typer.echo(f"strength 0 = H0: {out['strength_zero_is_h0']}  P paths: "
+               f"{ {k: (v['price_min'], v['price_max'], len(v['non_positive_rounds'])) for k, v in (out['p_paths'] or {}).items()} }")
+    for i in out["issues"]:
+        typer.echo(f"issue: {i}")
+    typer.echo(f"saved (sha256 {h[:16]}): {'OK' if out['ok'] else 'NOT OK'}")
+    raise typer.Exit(0 if out["ok"] else 2)
+
+
+@studya_app.command("status")
+def studya_status(config: Path = STUDYA_CFG, workers: int = typer.Option(4, "--workers")) -> None:
+    """Gates before the main measurement (fidelity -> calibration -> price check) and the time projection."""
+    from robustlab.studya import evaluate as E
+    from robustlab.studya import run as R
+
+    st = E.setup(config)
+    for g, ok, msg in R.gates(st):
+        typer.echo(f"{g}: {'OK' if ok else 'NOT READY'}  {msg}")
+    h = R.projected_hours(st, list(st.cfg["measurements"]), workers)
+    typer.echo(f"projected wall time for all measurements with {workers} workers: "
+               f"{'unknown (no pilot)' if h is None else f'{h:.1f} h'} (limit {R.MAX_HOURS:.0f} h)")
 
 
 @studya_app.command("pilot")
@@ -1316,21 +1361,45 @@ def studya_pilot(config: Path = STUDYA_CFG, workers: int = typer.Option(4, "--wo
 
 @studya_app.command("measure")
 def studya_measure(name: str = typer.Argument(..., help="S, P_E1_0.5, ... or ALL"), config: Path = STUDYA_CFG,
-                   workers: int = typer.Option(4, "--workers")) -> None:
-    """Main measurement (SPEC §6): each measurement ONCE; a second run is refused."""
+                   workers: int = typer.Option(4, "--workers"),
+                   rerun_reason: str | None = typer.Option(None, "--rerun-reason",
+                                                           help="Only after a technical failure (recorded)")) -> None:
+    """Main measurement (SPEC §6, §12.6): only after fidelity -> calibration -> price check; each measurement ONCE."""
     from robustlab.studya import evaluate as E
     from robustlab.studya import run as R
 
-    cfg, _ = E.load_config(config)
+    st = E.setup(config)
+    cfg = st.cfg
     names = list(cfg["measurements"]) if name == "ALL" else [name]
+    if any(n not in cfg["measurements"] for n in names):
+        typer.echo(f"unknown measurement in {names}", err=True)
+        raise typer.Exit(1)
+    blocked = [(g, msg) for g, ok, msg in R.gates(st) if not ok]
+    if blocked:
+        for g, msg in blocked:
+            typer.echo(f"refused: {g}: {msg}", err=True)
+        raise typer.Exit(1)
+    todo = [n for n in names if not R.already(n)]
+    h = R.projected_hours(st, todo, workers)
+    if h is None or h > R.MAX_HOURS:
+        typer.echo(f"refused: projected wall time {h} h (limit {R.MAX_HOURS} h, no approximation): report first",
+                   err=True)
+        raise typer.Exit(1)
+    typer.echo(f"projected wall time {h:.1f} h for {todo}")
     for n in names:
-        if n not in cfg["measurements"]:
-            typer.echo(f"unknown measurement {n}", err=True)
-            raise typer.Exit(1)
         if R.already(n):
             typer.echo(f"{n}: ALREADY_MEASURED (each measurement runs once)", err=True)
             continue
-        s, rounds = R.execute(config, n, cfg["measurements"][n], workers=workers, progress=_studya_progress)
+        try:
+            marker = R.begin(st, n, rerun_reason, workers)
+        except (RuntimeError, FileExistsError) as e:
+            typer.echo(f"refused: {e}", err=True)
+            raise typer.Exit(1) from e
+        calib = R.RESULTS / "calibration.json"
+        s, rounds = R.execute(config, n, cfg["measurements"][n], workers=workers, calib_path=calib,
+                              progress=_studya_progress)
+        s["attempts"] = marker["attempts"]
+        s["gates"] = [{"gate": g, "ok": ok, "message": msg} for g, ok, msg in R.gates(st)]
         R.save(s, rounds, R.RESULTS, n)
         _studya_print(s)
 
@@ -1371,25 +1440,26 @@ def studya_fidelity_run(config: Path = STUDYA_CFG,
                         terminal: Path = typer.Option(Path("configs/terminal.yaml"), "--terminal"),
                         partition: Path = typer.Option(Path("configs/data_partition.yaml"), "--partition"),
                         workspace: Path = typer.Option(Path("workspace_studya_fid"), "--workspace")) -> None:
-    """Run the 12 single tests of the fidelity check and compare them with the T1 model (definition t1)."""
+    """Run the fidelity tests (12 regular + stop-out tests) on MT5 and compare them with the T1 model (t2).
+    Saves results/fidelity_t1.json with the raw tester data (attach this one file)."""
+    from robustlab.config.loader import load_terminal_config
     from robustlab.mt5 import telemetry_reader as tr
     from robustlab.single_backtest import run_backtest
     from robustlab.storage.artifacts import ArtifactStore
     from robustlab.studya import evaluate as E
     from robustlab.studya import fidelity as fd
-    from robustlab.studya import run as R
 
     st = E.setup(config)
-    report = {"definition": fd.DEFINITION, "config_hash": st.cfg_hash, "tests": []}
-    for kind, L, H, req in fd.requests(st, workspace.resolve() / "studya_requests"):
+    acct_path = load_terminal_config(terminal).common_files_dir / fd.ACCOUNT_FILE
+    acct = json.loads(acct_path.read_text(encoding="utf-8-sig")) if acct_path.exists() else None
+    report: dict = {"definition": fd.DEFINITION, "config_hash": st.cfg_hash, "account_settings": acct, "tests": []}
+    for t, req in fd.requests(st, workspace.resolve() / "studya_requests"):
         out = run_backtest(req, terminal, partition, workspace)
-        item = {"kind": kind, "symbol": fd.SYMBOLS[kind], "InpLookback": L, "InpHoldBars": H, "status": out.status,
-                "run_id": out.run_id}
+        item: dict = {"name": t.name, "symbol": fd.SYMBOLS[t.kind], "status": out.status, "run_id": out.run_id}
+        report["tests"].append(item)
         if out.status not in ("SUCCEEDED", "ALREADY_SUCCEEDED"):
             item["message"] = out.message
-            item["match"] = False
-            report["tests"].append(item)
-            typer.echo(f"{kind} L={L} H={H}: {out.status} {out.message}")
+            typer.echo(f"{t.name}: {out.status} {out.message}")
             continue
         db = _open(workspace)
         try:
@@ -1402,22 +1472,50 @@ def studya_fidelity_run(config: Path = STUDYA_CFG,
                 return store.read(row["sha256"]).decode("utf-8-sig")
 
             deals = tr.parse_csv_text(art("telemetry_deals"), tr.DEALS_COLUMNS, "deals")
+            daily = tr.parse_csv_text(art("telemetry_daily"), tr.DAILY_COLUMNS, "daily")
             env = json.loads(art("telemetry_env"))
             stats = json.loads(art("telemetry_stats")).get("values", {})
         finally:
             db.close()
-        cmp = fd.compare(st, kind, fd.model(st, kind, L, H), deals, env, stats.get("profit"))
-        item.update(cmp)
-        report["tests"].append(item)
-        typer.echo(f"{kind} L={L} H={H}: deals model {cmp['deals_model']} tester {cmp['deals_tester']}  "
-                   f"first {cmp['first_deal']}  match: {cmp['match']}")
-        for i in cmp["issues"][:5]:
+        item["raw"] = fd.raw_of(deals, daily, env, stats.get("profit"))
+    _studya_fidelity_report(st, report)
+
+
+@studya_app.command("fidelity-check")
+def studya_fidelity_check(config: Path = STUDYA_CFG,
+                          report: Path | None = typer.Option(None, "--report", help="Default: results/fidelity_t1.json")) -> None:
+    """Re-judge an attached fidelity_t1.json from its raw tester data with the current T1 model (no MT5 needed)."""
+    from robustlab.studya import evaluate as E
+    from robustlab.studya import run as R
+
+    path = report or R.RESULTS / "fidelity_t1.json"
+    if not path.exists():
+        typer.echo(f"no report {path}", err=True)
+        raise typer.Exit(1)
+    _studya_fidelity_report(E.setup(config), json.loads(path.read_text(encoding="utf-8")))
+
+
+def _studya_fidelity_report(st, report: dict) -> None:
+    from robustlab.studya import fidelity as fd
+    from robustlab.studya import run as R
+
+    if report.get("config_hash") != st.cfg_hash:
+        typer.echo("note: the report was made with another study_a.yaml (raw data re-judged with the current one)")
+    rep = fd.check(st, report)
+    for x in rep["tests"]:
+        line = f"{x['name']}: deals model {x.get('deals_model')} tester {x.get('deals_tester')}"
+        if "daily" in x:
+            line += f"  daily max diff {x['daily']['max_abs_diff']}  SO {x['stop_out']['time']}"
+        typer.echo(f"{line}  match: {x['match']}")
+        for i in x["issues"][:5]:
             typer.echo(f"    {i}")
-    report["match"] = all(t.get("match") for t in report["tests"]) and len(report["tests"]) == 12
-    fd.save(report, R.RESULTS / "fidelity_t1.json")
-    typer.echo(f"=== fidelity t1: {'MATCH (all 12 tests)' if report['match'] else 'NOT MATCHED'} ===")
+    for i in rep["account_issues"]:
+        typer.echo(f"  {i}")
+    typer.echo(f"implied stop-out bracket (margin level %): {rep['implied_stop_out_bracket']}")
+    fd.save(rep, R.RESULTS / "fidelity_t1.json")
+    typer.echo(f"=== fidelity {fd.DEFINITION}: {'MATCH (all ' + str(rep['n_tests']) + ' tests + settings)' if rep['match'] else 'NOT MATCHED'} ===")
     typer.echo(f"saved: {R.RESULTS / 'fidelity_t1.json'}")
-    raise typer.Exit(0 if report["match"] else 2)
+    raise typer.Exit(0 if rep["match"] else 2)
 
 
 if __name__ == "__main__":  # pragma: no cover

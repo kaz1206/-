@@ -332,6 +332,7 @@ def single_series(data_dir: Path, common: Path, kv: dict[str, str], params: dict
         doc = doc["symbols"][kv["Symbol"]]
     start = dt.datetime.strptime(kv["FromDate"], "%Y.%m.%d").date().isoformat()
     t = doc["cells"][_cell_key(params, doc["axes"])][start]
+    t = t.get("by_deposit", {}).get(f"{float(kv['Deposit']):.0f}", t)  # study A stop-out tests (other deposits)
     cols = ["ticket", "time", "time_msc", "type", "entry", "volume", "price", "profit", "commission", "swap", "fee",
             "symbol", "magic", "position_id", "reason", "comment"]
     deals = [",".join(cols)] + [",".join(f'"{d[c]}"' if c == "comment" else d[c] for c in cols) for d in t["deals"]]
@@ -341,7 +342,7 @@ def single_series(data_dir: Path, common: Path, kv: dict[str, str], params: dict
     first, last = _ticks(t["daily"])
     env = env_doc(job_id, terminal_build=build, telemetry_version="3", tracking=t["tracking"], period=16388,
                   period_name="PERIOD_H4", first_tick=first, last_tick=last, bars=6 * len(t["daily"]),
-                  ticks=1000 * len(t["daily"]))
+                  ticks=1000 * len(t["daily"]), initial_balance=float(kv["Deposit"]))
     if "env_symbol" in doc:
         env["symbol"] = env["symbol"] | doc["env_symbol"]
         env["observed"] = {"spread": doc["env_symbol"].get("observed_spread", 12)}

@@ -66,7 +66,7 @@ def execute(cfg_path: Path, name: str, m: dict[str, Any], *, workers: int = 4, r
             calib_path: Path | None = None, progress=None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     st = E.setup(cfg_path)
     calib, calib_hash = None, None
-    if m.get("edge") is not None:
+    if m.get("edge") is not None or calib_path is not None:     # S records the calibration it ran under too
         cp = calib_path or RESULTS / "calibration.json"
         text = cp.read_text(encoding="utf-8")
         calib, calib_hash = json.loads(text), ids.sha256_hex(text)
@@ -152,8 +152,98 @@ def already(name: str) -> bool:
     return (RESULTS / f"{name}.json").exists()
 
 
-def calibration(cfg_path: Path, progress=None) -> tuple[dict[str, Any], str]:
+MAX_HOURS = 24.0
+
+
+def fidelity_status(st: E.Setup) -> tuple[bool, str]:
+    """The MT5 fidelity check (definition t2) re-judged NOW from its raw tester data with the current model."""
+    from robustlab.studya import fidelity as fd
+
+    path = RESULTS / "fidelity_t1.json"
+    if not path.exists():
+        return False, "no fidelity_t1.json (the MT5 fidelity check has not been run / attached)"
+    rep = fd.check(st, json.loads(path.read_text(encoding="utf-8")))
+    if not rep["match"]:
+        bad = [t["name"] for t in rep["tests"] if not t.get("match")]
+        return False, f"fidelity {fd.DEFINITION} NOT MATCHED (tests {bad}, settings {rep['account_issues'][:3]})"
+    return True, f"fidelity {fd.DEFINITION} matched ({rep['n_tests']} tests + settings)"
+
+
+def calibration_status(st: E.Setup) -> tuple[bool, str, str | None]:
+    path = RESULTS / "calibration.json"
+    if not path.exists():
+        return False, "no calibration.json", None
+    text = path.read_text(encoding="utf-8")
+    c = json.loads(text)
+    if c.get("version") != C.CALIBRATION_VERSION or c.get("config_hash") != st.cfg_hash:
+        return False, f"calibration.json is {c.get('version')} / another study_a.yaml", None
+    return True, "calibration fixed", ids.sha256_hex(text)
+
+
+def price_check_status(st: E.Setup, calib_hash: str | None) -> tuple[bool, str]:
+    path = RESULTS / "price_model_check.json"
+    if not path.exists():
+        return False, "no price_model_check.json"
+    c = json.loads(path.read_text(encoding="utf-8"))
+    if not c.get("ok") or c.get("config_hash") != st.cfg_hash or c.get("calibration_hash") != calib_hash:
+        return False, f"price check not passed for this config / calibration ({c.get('issues')})"
+    return True, "price model check passed (incl. P paths at the calibrated scales)"
+
+
+def gates(st: E.Setup) -> list[tuple[str, bool, str]]:
+    """What must hold before a main measurement (SPEC §12.6): fidelity -> calibration -> price check."""
+    f_ok, f_msg = fidelity_status(st)
+    c_ok, c_msg, c_hash = calibration_status(st)
+    p_ok, p_msg = price_check_status(st, c_hash)
+    return [("fidelity", f_ok, f_msg), ("calibration", c_ok, c_msg), ("price_check", p_ok, p_msg)]
+
+
+def projected_hours(st: E.Setup, names: list[str], workers: int) -> float | None:
+    """Wall-time projection from the pilot (seconds per round per worker, H0 and edge separately)."""
+    per = {}
+    for key, edge in (("pilot_h0", False), ("pilot_edge", True)):
+        p = RESULTS / f"{key}.json"
+        if not p.exists():
+            return None
+        s = json.loads(p.read_text(encoding="utf-8"))
+        per[edge] = s["timing"]["wall_seconds"] * s["timing"]["workers"] / s["rounds"]
+    sec = sum(per[st.cfg["measurements"][n].get("edge") is not None] * int(st.cfg["measurements"][n]["rounds"])
+              for n in names)
+    return sec / workers / 3600
+
+
+def begin(st: E.Setup, name: str, rerun_reason: str | None, workers: int) -> dict[str, Any]:
+    """Started marker (SPEC §12.6): a measurement that started and left no result failed technically; it is re-run
+    only with the SAME config / calibration / seeds and a recorded reason. A finished one never runs again."""
+    if already(name):
+        raise FileExistsError(f"{name}: ALREADY_MEASURED (each measurement runs once)")
+    marker = RESULTS / f"{name}.started.json"
+    attempts = json.loads(marker.read_text(encoding="utf-8"))["attempts"] if marker.exists() else []
+    if attempts and not rerun_reason:
+        raise RuntimeError(f"{name} was started before ({attempts[-1]['started']}) and left no result: re-run only "
+                           "with --rerun-reason '<what failed>' (same settings and seeds)")
+    _ok, _msg, c_hash = calibration_status(st)
+    if attempts and any(a["config_hash"] != st.cfg_hash or a["calibration_hash"] != c_hash for a in attempts):
+        raise RuntimeError(f"{name}: config or calibration changed since the first attempt; a re-run must use the "
+                           "same settings")
+    attempts.append({"started": time.strftime("%Y-%m-%dT%H:%M:%S"), "config_hash": st.cfg_hash,
+                     "calibration_hash": c_hash, "measurement": st.cfg["measurements"][name], "workers": workers,
+                     "version": VERSION, "rerun_reason": rerun_reason})
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    marker.write_text(json.dumps({"name": name, "attempts": attempts}, indent=1, sort_keys=True), encoding="utf-8")
+    return {"attempts": attempts}
+
+
+def calibration(cfg_path: Path, progress=None, out_path: Path | None = None) -> tuple[dict[str, Any], str]:
+    """Official calibration (results/calibration.json) only after the fidelity check matched (SPEC §12.6).
+    out_path: a provisional copy elsewhere (not usable by a measurement)."""
     st = E.setup(cfg_path)
+    if out_path is None:
+        ok, msg = fidelity_status(st)
+        if not ok:
+            raise RuntimeError(f"official calibration refused: {msg}")
     out = C.calibrate(st, progress)
-    h = C.save(out, RESULTS / "calibration.json")
+    if out_path is not None:
+        out["provisional"] = True
+    h = C.save(out, out_path or RESULTS / "calibration.json")
     return out, h

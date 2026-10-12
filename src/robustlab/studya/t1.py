@@ -91,7 +91,7 @@ def run_test(p: np.ndarray, w: Window, lookback: int, hold: int, *, lots: float,
     ask = np.round(bid + spread, 5)
     pos_arr = np.zeros(n, dtype=int)
     entry_arr = np.zeros(n)
-    bal_arr = np.full(n, deposit)
+    bal_arr = np.full(n, float(deposit))           # float even for an int deposit (else balances truncate)
     pre: list[tuple[int, float]] = []           # (step, equity before the trade) on deciding ticks
     bal = deposit
     entry = 0.0

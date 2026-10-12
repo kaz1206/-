@@ -24,8 +24,9 @@ edges:
   E1: {kind: regime, persistence_bars: 756}     # mean regime length 6 months (experimental setting)
   E2: {kind: ou_drift, half_life_bars: 378}     # drift half-life 3 months (experimental setting)
 reference_cell: {InpLookback: 756, InpHoldBars: 18}
-calibration: {worlds: 10, base_seed: 20261130, seeds: {E1: 20261131, E2: 20261132}, targets: [0.5, 1.0, 1.5],
-              tolerance: 0.02}
+# SPEC §12.4: 40 independent worlds, Sharpe per world, target = mean of the 40 values (no concatenation)
+calibration: {worlds: 40, aggregation: mean_of_per_world_sharpe, base_seed: 20261130,
+              seeds: {E1: 20261131, E2: 20261132}, targets: [0.5, 1.0, 1.5], tolerance: 0.02}
 criterion: {max_upper_bound: 0.05, confidence: 0.95, s1_max_se: 3.0}
 measurements:
   S: {edge: null, rounds: 1000, base_seed: 20261101}
@@ -40,4 +41,8 @@ pilot:
   edge: {edge: E1, strength: 1.0, rounds: 50, base_seed: 20261191, edge_seed: 20261192}
 equivalence: {base_seed: 20261181, edge_seed: 20261182}
 fidelity: {seeds: {H0: 20261171, E1: 20261172}, test_weekdays: 520, pre_weekdays: 291,
-           cells: [[126, 6], [126, 30], [756, 6], [756, 30], [1512, 6], [1512, 30]]}
+           cells: [[126, 6], [126, 30], [756, 6], [756, 30], [1512, 6], [1512, 30]],
+           # stop-out tests (SPEC §12.3): small TEST deposits so that the 50% level is reached; lots and EA rules
+           # unchanged. Model: SO 2010-01-06 00:00 / 2010-10-12 22:00 / 2010-01-18 06:00, no deal afterwards.
+           stop_out_tests: [{kind: H0, cell: [126, 6], deposit: 200.0}, {kind: H0, cell: [1512, 6], deposit: 300.0},
+                            {kind: E1, cell: [1512, 6], deposit: 300.0}]}

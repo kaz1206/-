@@ -170,3 +170,77 @@ def test_trace_is_complete_and_serial_equals_parallel(tmp_path):
             if row.get("p7", {}).get("outcome") == "SELECTED":
                 assert "p8a" in row
     assert s1["rounds"] == 4 and "s1" in s1 and s1["verdict"] in ("MET", "NOT_MET", "INVALID_S1")
+
+
+def test_int_deposit_keeps_cents():
+    spb, spd = 2, 4
+    days = days_n(6)
+    p = np.array([1.0] * 25)
+    p[8:] = 1.0010
+    p[13:] = 1.00123
+    w = t1.Window(4, 24)
+    kw = {**KW, "deposit": 10000}
+    a = t1.run_test(p, w, 2, 2, spb=spb, spd=spd, days=days, **kw)
+    b = t1.run_test(p, w, 2, 2, spb=spb, spd=spd, days=days, **KW)
+    assert a.daily == b.daily and a.deals == b.deals
+
+
+def test_calibration_is_the_mean_of_per_world_sharpe(tmp_path):
+    from robustlab.studya import calibrate as C
+
+    text = _small_cfg(tmp_path).read_text().replace("worlds: 40,", "worlds: 4,").replace("targets: [0.5, 1.0, 1.5]",
+                                                                                          "targets: [1.0]")
+    cfg = tmp_path / "study_a_cal.yaml"
+    cfg.write_text(text.replace("reference_cell: {InpLookback: 756, InpHoldBars: 18}",
+                                "reference_cell: {InpLookback: 24, InpHoldBars: 18}"))
+    st = E.setup(cfg)
+    out = C.calibrate(st)
+    for name, res in out["edges"].items():
+        r = res["1.0"]
+        ref = r["per_world"]["24_18"]
+        assert len(ref) == 4 and r["reference"]["mean"] == pytest.approx(float(np.mean(ref)))
+        assert abs(r["reference"]["diff_from_target"]) <= 0.02
+        assert {"median", "sd", "min", "max", "se_mean"} <= set(r["reference"])
+        assert len(r["summary"]) == len(st.lookbacks) * len(st.holds)
+        # each world on its own: recompute world 2 by hand
+        e = st.cfg["edges"][name]
+        c = st.cfg["calibration"]
+        u = prices.edge_unit(e["kind"], st.n_bars, st.pm.steps_per_bar, int(c["seeds"][name]), 2,
+                             persistence_bars=float(e.get("persistence_bars", 0)),
+                             half_life_bars=float(e.get("half_life_bars", 0)))
+        p = prices.path(prices.base_steps(st.n_bars, st.pm, int(c["base_seed"]), 2) + r["scale"] * u, 1.10)
+        assert C.sharpe_world(st, p, (24, 18)) == ref[2]
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(text.replace("aggregation: mean_of_per_world_sharpe", "aggregation: pooled"))
+    with pytest.raises(ValueError):
+        C.calibrate(E.setup(bad))
+
+
+def test_measurement_gates_and_rerun_marker(tmp_path, monkeypatch):
+    monkeypatch.setattr(R, "RESULTS", tmp_path / "results")
+    st = E.setup(_small_cfg(tmp_path))
+    g = R.gates(st)
+    assert [x[0] for x in g] == ["fidelity", "calibration", "price_check"] and not any(x[1] for x in g)
+    with pytest.raises(RuntimeError):
+        R.calibration(_small_cfg(tmp_path))          # official calibration needs the fidelity match
+    R.begin(st, "S", None, 4)
+    with pytest.raises(RuntimeError, match="rerun-reason"):
+        R.begin(st, "S", None, 4)
+    m = R.begin(st, "S", "worker crashed (out of memory)", 4)
+    assert len(m["attempts"]) == 2 and m["attempts"][1]["rerun_reason"].startswith("worker")
+    (R.RESULTS / "S.json").write_text("{}")
+    with pytest.raises(FileExistsError):
+        R.begin(st, "S", "again", 4)
+
+
+def test_price_check_same_draws_as_p10_and_strength_zero(tmp_path):
+    from robustlab.studya import pricecheck as PC
+
+    cfg = tmp_path / "pc.yaml"
+    cfg.write_text(_small_cfg(tmp_path).read_text().replace("S: {edge: null, rounds: 1000,", "S: {edge: null, rounds: 60,"))
+    out = PC.run(cfg, calib_path=tmp_path / "none.json")
+    assert out["same_as_p10"]["price_block_equal"] and out["same_as_p10"]["max_abs_step_return_diff_rounds_0_4"] < 1e-12
+    assert out["strength_zero_is_h0"] and out["s_paths"]["all_positive"]
+    rel = out["s_paths"]["relative_returns_bar_level_mean_of_50_rounds"]
+    assert rel["multiplicative_path"]["bar_sd"] == pytest.approx(rel["drawn_r_t"]["bar_sd"], rel=1e-3)
+    assert out["p_paths"] is None and not out["ok"]          # P paths need the calibration

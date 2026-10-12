@@ -1,0 +1,114 @@
+{
+ "calibration_hash": null,
+ "config_hash": "33cb1f490a79822a47325f964d0b3652791a0d74e32c3d2e8d5b152faa8923df",
+ "issues": [
+  "P paths not checked: no calibration yet (run again after `rlab studya calibrate`)"
+ ],
+ "ok": false,
+ "p_paths": null,
+ "prices_version": "pa2",
+ "s_paths": {
+  "absolute_width": {
+   "mean_abs_step_points_arithmetic": {
+    "max": 64.17934246531755,
+    "min": 59.66011995672647,
+    "p01": 59.93069933657886,
+    "p10": 60.72543154193711,
+    "p50": 61.68083595838107,
+    "p90": 62.72089020936745,
+    "p99": 63.51590572101312
+   },
+   "mean_abs_step_points_multiplicative": {
+    "max": 119.00946608120148,
+    "min": 31.379291555301,
+    "p01": 36.19204992363498,
+    "p10": 45.962558069237616,
+    "p50": 60.668504200076356,
+    "p90": 82.01930563510246,
+    "p99": 108.14094275009542
+   },
+   "ratio_multiplicative_to_arithmetic": {
+    "max": 1.9160719758497518,
+    "min": 0.5016933048119717,
+    "p01": 0.579572056614839,
+    "p10": 0.746641301880546,
+    "p50": 0.9815707029938305,
+    "p90": 1.3293244074221156,
+    "p99": 1.7544463160642414
+   }
+  },
+  "all_positive": true,
+  "arithmetic_paths_reaching_0": 9,
+  "final_price": {
+   "arithmetic": {
+    "max": 2.34681,
+    "min": -0.32631,
+    "p01": 0.0702231,
+    "p10": 0.55143,
+    "p50": 1.1124749999999999,
+    "p90": 1.6567310000000002,
+    "p99": 2.1641231999999997
+   },
+   "multiplicative": {
+    "max": 3.16864,
+    "min": 0.2792,
+    "p01": 0.40060979999999996,
+    "p10": 0.619066,
+    "p50": 1.0318999999999998,
+    "p90": 1.6967560000000002,
+    "p99": 2.6777795999999996
+   }
+  },
+  "price_max": {
+   "max": 3.55707,
+   "min": 1.1,
+   "p01": 1.1043951,
+   "p10": 1.145866,
+   "p50": 1.403315,
+   "p90": 2.0274300000000003,
+   "p99": 2.954333299999999
+  },
+  "price_min": {
+   "max": 1.09959,
+   "min": 0.26858,
+   "p01": 0.379086,
+   "p10": 0.550077,
+   "p50": 0.816955,
+   "p90": 1.0371780000000002,
+   "p99": 1.0936464
+  },
+  "reading": "relative returns: the same draws (the multiplicative path reproduces them up to 5-digit rounding); absolute widths: proportional to the price level in the multiplicative path, constant (start * r_t) in the arithmetic one",
+  "relative_returns_bar_level_mean_of_50_rounds": {
+   "arithmetic_path_P10_style": {
+    "ac1_abs_r": 0.1379063990408428,
+    "ac1_r": -0.0011058275927200414,
+    "bar_sd": 0.0026766708561540347,
+    "excess_kurtosis": 4.131604691293193,
+    "share_abs_gt_4sd": 0.0022508591065292095
+   },
+   "drawn_r_t": {
+    "ac1_abs_r": 0.09439723975040502,
+    "ac1_r": -0.0005382688415119982,
+    "bar_sd": 0.002191698082369536,
+    "excess_kurtosis": 1.331884818346072,
+    "share_abs_gt_4sd": 0.0015661193839887999
+   },
+   "multiplicative_path": {
+    "ac1_abs_r": 0.09438944282291217,
+    "ac1_r": -0.0005395080122414667,
+    "bar_sd": 0.002191702271207735,
+    "excess_kurtosis": 1.3318263022798897,
+    "share_abs_gt_4sd": 0.0015661193839888
+   }
+  },
+  "rounds": 1000
+ },
+ "same_as_p10": {
+  "max_abs_step_return_diff_rounds_0_4": 2.5240226575462543e-16,
+  "note": "P10 arithmetic increments / start vs study A relative steps, same generator",
+  "p10_config": "configs/null_archetypes.yaml (read only)",
+  "price_block_equal": true
+ },
+ "strength_zero_is_h0": true,
+ "version": "pc1"
+}
