@@ -1244,14 +1244,20 @@ def null_fidelity_compare(run_id: str | None = typer.Argument(None, help="Defaul
     deals = tr.parse_csv_text(text, tr.DEALS_COLUMNS, "deals")
     model = fd.smoketest_model(fd.path_of(days, pm, cfg["account"]["start_price"]), days, fast, slow, pm)
     res = fd.compare(model, deals)
-    for k in ("model_deals", "tester_deals", "mismatches", "match"):
+    for k in ("model_deals", "tester_deals", "mismatches"):
         typer.echo(f"{k}: {res[k]}")
     for m in res["first"]:
         typer.echo(f"  #{m['i']}: model {m['model']} | tester {m['tester']}")
     typer.echo("diagnosis (does not change the verdict above):")
     for k, v in res["diagnosis"].items():
         typer.echo(f"  {k}: {v}")
-    raise typer.Exit(0 if res["match"] else 2)
+    typer.echo("=== v1 (pre-registered first, kept as recorded) ===")
+    typer.echo(f"v1 match: {res['match']}")
+    v2 = fd.compare_v2(model, deals)
+    typer.echo("=== v2 (defined 2026-10-12 before the re-verification: same M1 bar, end-of-test apart, profits) ===")
+    for k, v in v2.items():
+        typer.echo(f"{k}: {v}")
+    raise typer.Exit(0 if v2["match"] else 2)
 
 
 if __name__ == "__main__":  # pragma: no cover

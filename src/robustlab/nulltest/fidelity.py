@@ -76,15 +76,22 @@ def export(out_csv: Path, n_days: int, pm: sim.PriceModel, start_price: float) -
             "to_exclusive": (days[-1] + dt.timedelta(days=1)).isoformat(), "symbol": SYMBOL}
 
 
+CONTRACT = 100_000.0
+END_OF_TEST = "end of test"
+
+
 @dataclass(frozen=True)
 class Deal:
     time: dt.datetime
     side: str      # "buy" / "sell"
     entry: str     # "in" / "out"
     price: float
+    profit: float = 0.0   # closing deals: (exit - entry) * direction * lots * contract, rounded to cents
+    comment: str = ""
 
 
-def smoketest_model(path: np.ndarray, n_days: int, fast: int, slow: int, pm: sim.PriceModel) -> list[Deal]:
+def smoketest_model(path: np.ndarray, n_days: int, fast: int, slow: int, pm: sim.PriceModel,
+                    lots: float = 0.01) -> list[Deal]:
     """The exact RL_SmokeTest rules on the exported prices (5-digit rounding as in the CSV)."""
     p = np.round(path, 5)
     spb, spd = pm.steps_per_bar, pm.bars_per_day * pm.steps_per_bar
@@ -98,6 +105,7 @@ def smoketest_model(path: np.ndarray, n_days: int, fast: int, slow: int, pm: sim
 
     deals: list[Deal] = []
     pos = 0
+    entry = 0.0
     first = PRE_DAYS * spd       # the EA starts flat at the first tick of the test period (step first + 1)
     for k in range(2, K):        # first tick of bar k + 1, last closed bars k - 1 and k
         if k * spb < first:
@@ -111,16 +119,17 @@ def smoketest_model(path: np.ndarray, n_days: int, fast: int, slow: int, pm: sim
         s = k * spb + 1
         bid = float(p[s])
         t = step_time(s, days, spd)
+        ask = round(bid + spread, 5)
         if pos > 0:
-            deals.append(Deal(t, "sell", "out", bid))
+            deals.append(Deal(t, "sell", "out", bid, round((bid - entry) * lots * CONTRACT, 2)))
         elif pos < 0:
-            deals.append(Deal(t, "buy", "out", round(bid + spread, 5)))
+            deals.append(Deal(t, "buy", "out", ask, round((entry - ask) * lots * CONTRACT, 2)))
         if up:
-            deals.append(Deal(t, "buy", "in", round(bid + spread, 5)))
-            pos = 1
+            deals.append(Deal(t, "buy", "in", ask))
+            pos, entry = 1, ask
         else:
             deals.append(Deal(t, "sell", "in", bid))
-            pos = -1
+            pos, entry = -1, bid
     return deals
 
 
@@ -154,3 +163,44 @@ def compare(model: list[Deal], tester: list[dict[str, str]]) -> dict[str, Any]:
                  "tester_profit_nonzero_deals": sum(1 for d in rows if float(d["profit"]) != 0.0)}
     return {"model_deals": len(model), "tester_deals": len(got), "mismatches": len(mism), "first": mism[:5],
             "match": not mism, "diagnosis": diagnosis}
+
+
+def spread_cost(model: list[Deal], lots: float = 0.01) -> float:
+    """Spread paid by the model: one spread per opened position (buys at ask, sells at bid)."""
+    return round(sum(1 for d in model if d.entry == "in") * SPREAD_POINTS * POINT * lots * CONTRACT, 2)
+
+
+def compare_v2(model: list[Deal], tester: list[dict[str, str]]) -> dict[str, Any]:
+    """Comparison v2 (P10_PLAN §8.3, fixed BEFORE the re-verification): same order, side, entry; price within 0.5
+    point; time difference in [0, 60) seconds (same M1 bar); the tester's own end-of-test close is not an EA
+    decision and is reported apart; each closing deal's profit (without swap / commission) within 0.01."""
+    from robustlab.metrics.engine import DEAL_BUY, DEAL_SELL, ENTRY_IN
+    from robustlab.mt5.telemetry_reader import parse_mt5_time
+
+    rows = sorted((d for d in tester if int(d["type"]) in (DEAL_BUY, DEAL_SELL)),
+                  key=lambda d: (d["time"], int(d["ticket"])))
+    eot = [d for d in rows if (d.get("comment") or "").strip().strip('"') == END_OF_TEST]
+    ea = [d for d in rows if d not in eot]
+    got = [Deal(parse_mt5_time(d["time"]), "buy" if int(d["type"]) == DEAL_BUY else "sell",
+                "in" if int(d["entry"]) == ENTRY_IN else "out", float(d["price"]), float(d["profit"])) for d in ea]
+    deal_mism, profit_mism = [], []
+    for i in range(max(len(model), len(got))):
+        a = model[i] if i < len(model) else None
+        b = got[i] if i < len(got) else None
+        ok = (a is not None and b is not None and a.side == b.side and a.entry == b.entry
+              and abs(a.price - b.price) < 0.5 * POINT and 0 <= (b.time - a.time).total_seconds() < 60)
+        if not ok:
+            deal_mism.append({"i": i, "model": a and str(a), "tester": b and str(b)})
+        elif a.entry == "out" and abs(a.profit - b.profit) >= 0.01:
+            profit_mism.append({"i": i, "model_profit": a.profit, "tester_profit": b.profit})
+    closes_m = [d.profit for d in model if d.entry == "out"]
+    closes_t = [d.profit for d in got if d.entry == "out"]
+    return {"definition": "v2", "model_deals": len(model), "tester_ea_deals": len(got),
+            "deal_mismatches": len(deal_mism), "first_deal_mismatches": deal_mism[:5],
+            "profit_mismatches": len(profit_mism), "first_profit_mismatches": profit_mism[:5],
+            "closed_profit_model": round(sum(closes_m), 2), "closed_profit_tester": round(sum(closes_t), 2),
+            "spread_cost_model": spread_cost(model),
+            "end_of_test": [{"time": d["time"], "price": d["price"], "profit": d["profit"]} for d in eot],
+            "swap_tester": round(sum(float(d["swap"]) for d in rows), 2),
+            "commission_tester": round(sum(float(d["commission"]) + float(d["fee"]) for d in rows), 2),
+            "match": not deal_mism and not profit_mism}

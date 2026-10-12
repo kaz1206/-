@@ -160,3 +160,34 @@ def test_fidelity_export_and_model(tmp_path):
     assert res["diagnosis"]["time_offsets_seconds"] == [0]
     rows[0]["price"] = f"{deals[0].price + 0.0001:.5f}"
     assert fd.compare(deals, rows)["mismatches"] == 1
+
+
+def test_fidelity_compare_v2_profits_and_end_of_test():
+    import datetime as dt
+
+    from robustlab.nulltest import fidelity as fd
+
+    t0 = dt.datetime(2012, 1, 3, 4)
+    model = [fd.Deal(t0, "buy", "in", 1.10010), fd.Deal(t0 + dt.timedelta(hours=8), "sell", "out", 1.10110, 1.00),
+             fd.Deal(t0 + dt.timedelta(hours=8), "sell", "in", 1.10110)]
+    assert round((1.10110 - 1.10010) * 0.01 * fd.CONTRACT, 2) == 1.00
+
+    def row(i, d, dt_s=30, profit=None, comment=""):
+        return {"ticket": str(i), "time": (d.time + dt.timedelta(seconds=dt_s)).strftime("%Y.%m.%d %H:%M:%S"),
+                "type": "0" if d.side == "buy" else "1", "entry": "0" if d.entry == "in" else "1",
+                "price": f"{d.price:.5f}", "profit": f"{d.profit if profit is None else profit:.2f}", "swap": "-0.05",
+                "commission": "0", "fee": "0", "comment": comment}
+
+    eot = {"ticket": "9", "time": "2012.01.31 23:59:30", "type": "0", "entry": "1", "price": "1.10200",
+           "profit": "-0.90", "swap": "0", "commission": "0", "fee": "0", "comment": "end of test"}
+    rows = [row(i, d) for i, d in enumerate(model)] + [eot]
+    r = fd.compare_v2(model, rows)
+    assert r["match"] and r["tester_ea_deals"] == 3 and len(r["end_of_test"]) == 1
+    assert r["closed_profit_model"] == r["closed_profit_tester"] == 1.00 and r["swap_tester"] == -0.15
+    assert r["spread_cost_model"] == round(2 * 10 * 0.00001 * 0.01 * fd.CONTRACT, 2)
+    # v1 would fail these rows (30 s later, extra deal); v2 still catches a wrong profit and a 60 s shift
+    assert not fd.compare(model, rows)["match"]
+    bad = [row(0, model[0]), row(1, model[1], profit=0.0), row(2, model[2])]
+    assert fd.compare_v2(model, bad)["profit_mismatches"] == 1
+    late = [row(0, model[0], dt_s=60), row(1, model[1]), row(2, model[2])]
+    assert fd.compare_v2(model, late)["deal_mismatches"] == 1
