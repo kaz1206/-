@@ -36,7 +36,7 @@ measurements:
   P_E2_1.0: {edge: E2, strength: 1.0, rounds: 400, base_seed: 20261101, edge_seed: 20261122}
   P_E2_1.5: {edge: E2, strength: 1.5, rounds: 400, base_seed: 20261101, edge_seed: 20261123}
 pilot:
-  null: {edge: null, rounds: 50, base_seed: 20261191}
+  h0: {edge: null, rounds: 50, base_seed: 20261191}
   edge: {edge: E1, strength: 1.0, rounds: 50, base_seed: 20261191, edge_seed: 20261192}
 equivalence: {base_seed: 20261181, edge_seed: 20261182}
 fidelity: {seeds: {H0: 20261171, E1: 20261172}, test_weekdays: 520, pre_weekdays: 291,

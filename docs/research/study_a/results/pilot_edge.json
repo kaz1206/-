@@ -1,0 +1,74 @@
+{
+ "calibration_hash": "6cfb4d5e897ff7acec522855c6cefac45f506984a803fa469c81d0b7d4c52551",
+ "ci": {
+  "lower": 0.47174916305285525,
+  "upper": 0.7534989222001378,
+  "upper_one_sided": 0.7349308415130889
+ },
+ "config_hash": "258c2c6f166d6b9db7deeece556407f7fa3aa21f5db7d7d4d58a73a265073f87",
+ "criterion": {
+  "confidence": 0.95,
+  "max_upper_bound": 0.05,
+  "s1_max_se": 3.0
+ },
+ "detected_rounds": 31,
+ "edge_scale": 0.0001625,
+ "funnel_mean_per_round": {
+  "gate_pass": 37.6,
+  "p4_pass": 40.52,
+  "p8a_pass": 0.72,
+  "selected": 1.24
+ },
+ "measurement": {
+  "base_seed": 20261191,
+  "edge": "E1",
+  "edge_seed": 20261192,
+  "rounds": 50,
+  "strength": 1.0
+ },
+ "n_trials": 85,
+ "name": "pilot_edge",
+ "notes": [
+  "Rates are estimates under THIS synthetic model and THIS archetype, not the error or detection rate of a real EA on a real market (SPEC \u00a71).",
+  "Not replicable on synthetic data: the P8a reproducibility re-run (always PASS) and the exposure ledger. Approximation: V[SR] of DSR from the round's 60 results (SPEC \u00a75.1).",
+  "No swap in the model: study B (real EURUSD) pays swaps; this detection rate can be optimistic (SPEC \u00a77.3)."
+ ],
+ "rate": 0.62,
+ "reason_counts": {
+  "p4": {
+   "INSUFFICIENT_TRADES": 769,
+   "LOW_PSR": 253,
+   "NEGATIVE_EXPECTANCY": 24
+  },
+  "p7": {
+   "ISOLATED_PEAK": 14,
+   "NEIGHBORHOOD_INSUFFICIENT": 136,
+   "REDUNDANT_IN_REGION": 1818,
+   "SELECTED": 62
+  },
+  "p8a": {
+   "COST_FRAGILE": 6,
+   "PASS": 36,
+   "VALIDATION_INSUFFICIENT_EVIDENCE": 26,
+   "VALIDATION_PERIOD_LOSS": 6
+  }
+ },
+ "rounds": 50,
+ "rounds_with": {
+  "p4_pass": 50,
+  "p8a_pass": 31,
+  "selected": 50
+ },
+ "s1": {
+  "gross_mean": 17251.8986,
+  "se": 1408.5192888310721,
+  "z": 12.248251576531354
+ },
+ "timing": {
+  "round_seconds_max": 43.982,
+  "round_seconds_mean": 33.24588,
+  "wall_seconds": 437.4,
+  "workers": 4
+ },
+ "version": "studyA-pa2+t1a+ea1"
+}
