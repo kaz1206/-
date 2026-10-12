@@ -63,3 +63,84 @@ Get-Process terminal64 -ErrorAction SilentlyContinue | Where-Object { $_.Path -e
 
 4 と 5 の各コマンドの表示をそのまま貼ってください（ログ本文は表示されないので、口座番号や IP は含まれません）。
 特に `run_id`（`rn_…`）と `round_id`（`or_…`）が必要です。次の回（P4〜P7）のコマンドは、その ID を入れた形でお渡しします。
+
+## 第 2 回: P3 の確認 → P4 足切り → P5 ロバストネス → P6 統計評価 → P7 選抜
+
+**同じ PowerShell の窓で、上から順に**実行してください（途中で窓を閉じると、`$fl` などの変数が消えます。消えたら、その段階の `$… =` の行からやり直せば同じ ID が戻ります。同じ内容の実行は `ALREADY_DONE` になり、二重に記録されません）。
+
+各段階は「① 普通に実行して表示を見る → ② 同じコマンドに `--json` を付けて ID を変数に入れる（実行済みなので何も増えない）→ ③ 変数を表示」の順です。
+
+### 0. 場所の確認
+
+```powershell
+cd C:\work\repo\rlab
+```
+
+### 1. P3 の確認と P1 の指標
+
+```powershell
+.\.venv\Scripts\rlab.exe optimize show or_667b73e2bf2d8a70
+```
+- 期待: `passes_stored=25`、`chunks_succeeded=1/1`、ジョブの `agents=` が `remote 0`・`cloud 0`。
+```powershell
+.\.venv\Scripts\rlab.exe metrics show rn_62192f6024a089e2
+```
+
+### 2. P4 足切り（swing_trend）
+
+```powershell
+.\.venv\Scripts\rlab.exe filter run or_667b73e2bf2d8a70 --profile swing_trend
+```
+```powershell
+$fl = (.\.venv\Scripts\rlab.exe filter run or_667b73e2bf2d8a70 --profile swing_trend --json | ConvertFrom-Json).filter_id
+```
+```powershell
+$fl
+```
+- `fl_` で始まる ID が出れば OK。合格（passed）が 0 件でも、そのまま次へ進んでください（事前登録どおり P7 の「選抜 0 件」まで確認します）。
+
+### 3. P5 ロバストネス
+
+```powershell
+.\.venv\Scripts\rlab.exe robust run or_667b73e2bf2d8a70 --filter $fl
+```
+```powershell
+$rb = (.\.venv\Scripts\rlab.exe robust run or_667b73e2bf2d8a70 --filter $fl --json | ConvertFrom-Json).robust_id
+```
+```powershell
+$rb
+```
+```powershell
+.\.venv\Scripts\rlab.exe robust map $rb --metric score
+```
+```powershell
+.\.venv\Scripts\rlab.exe robust map $rb --metric robust
+```
+
+### 4. P6 統計評価（シードは事前登録の 20261015）
+
+```powershell
+.\.venv\Scripts\rlab.exe stats run or_667b73e2bf2d8a70 --filter $fl --seed 20261015
+```
+```powershell
+$st = (.\.venv\Scripts\rlab.exe stats run or_667b73e2bf2d8a70 --filter $fl --seed 20261015 --json | ConvertFrom-Json).stat_id
+```
+```powershell
+$st
+```
+
+### 5. P7 選抜
+
+```powershell
+.\.venv\Scripts\rlab.exe select run or_667b73e2bf2d8a70 --filter $fl --robust $rb --stats $st
+```
+```powershell
+$sl = (.\.venv\Scripts\rlab.exe select run or_667b73e2bf2d8a70 --filter $fl --robust $rb --stats $st --json | ConvertFrom-Json).sel_id
+```
+```powershell
+$sl
+```
+
+### 6. 送ってほしいもの
+
+1〜5 の表示をすべてそのまま貼ってください。**P8a（検証期間の実行）はまだ行わないでください。** P7 の結果を見て、事前登録のルールどおりに次の手順をお渡しします。
