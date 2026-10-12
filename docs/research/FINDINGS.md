@@ -176,6 +176,8 @@
 
 - [x] **P9（リスク評価・配分）**（2026-10-12 確認 [S-HW-P9]: `account_info` の 7 項目、`symbol_info` の 8 項目、`order_calc_margin`・`order_calc_profit` が口座通貨（JPY）で妥当な値。口座番号等は出力されず。`trade_calc_mode` = 0 も 2 回目で確認）: `account_info()` に `margin_so_mode`・`margin_so_so`・`equity`・`currency`・`leverage` があり、端末の口座情報と一致する。`symbol_info()` の `volume_min`・`volume_step`・`volume_max`・`trade_contract_size` が端末の「仕様」画面と一致する（EURUSD・XAUUSD）。`order_calc_margin(ORDER_TYPE_BUY/SELL, symbol, 1.0, price)` と `order_calc_profit(ORDER_TYPE_BUY, symbol, 1.0, price, price + width)` が口座通貨で妥当な値を返す（引数の順序と型は公式ページがブロックされ B [S-MT5PYDOC]）。スナップショットに口座番号・名義・サーバー名が入らない
 
+- [ ] **P10（忠実度チェック）**: `RL_ImportH0.mq5` がコンパイルでき、`CustomSymbolCreate` と `CustomRatesReplace` が M1 足 374,400 本を書き込める。Strategy Tester が `RL_H0_EURUSD`（H4、1 minute OHLC）で単体テストを走らせ、Telemetry の完了マーカーまで出る。約定価格が bid / ask（スプレッド 10 ポイント）になる [S-MQL5-CUSTOM]
+
 ### 3.1 P1 実機確認の結果（2026-10-09）
 
 W1〜W14 の詳細と設計変更案 F1〜F8 は [verification/p1/RECORD.md](../../verification/p1/RECORD.md)。要点:

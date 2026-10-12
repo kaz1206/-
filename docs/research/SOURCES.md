@@ -23,6 +23,7 @@
 |---|---|---|---|
 | S-MT5PY | PyPI `MetaTrader5` 5.0.6231（2026-09-27）パッケージ実物（`_core.cp312-win_amd64.pyd` と `__init__.py`） | 公開関数一覧（`initialize`, `login`, `shutdown`, `version`, `last_error`, `terminal_info`, `account_info`, `symbol_info`, `symbol_info_tick`, `symbols_get`, `symbol_select`, `copy_rates_*`, `copy_ticks_*`, `orders_*`, `positions_*`, `history_orders_*`, `history_deals_*`, `order_calc_margin`, `order_calc_profit`, `order_check`, `order_send`, `market_book_*`）。**Strategy Tester 関連の関数は存在しない**。配布ホイールは **win_amd64 のみ**（cp36〜cp314） | **A** |
 | S-MT5PYDOC | https://www.mql5.com/en/docs/integration/python_metatrader5 （PyPI から参照される公式リファレンス） | 各関数の詳細シグネチャ | B（ページはブロック） |
+| S-MQL5-CUSTOM | MQL5 リファレンス「カスタム銘柄」（`CustomSymbolCreate`・`CustomRatesReplace`・`CustomSymbolSetInteger`・`SymbolExist`）と、Strategy Tester がカスタム銘柄でテストできること | P10 の忠実度チェック（合成 H0 価格の銘柄を作る） | B（記憶による。公式ページはブロック。実機で確認） |
 | S-MT5START | MetaTrader 5 ヘルプ「Platform Start – For Advanced Users」 https://www.metatrader5.com/en/terminal/help/start_advanced/start | `/config:` による起動。`[Tester]` セクションの `Expert`（ないとテストが始まらない）, `Symbol`, `Period`（省略時 H1）, `ShutdownTerminal`（省略時 0）等 | B |
 | S-MT5B4230 | MetaTrader 5 build 4230 リリースノート https://www.metaquotes.net/en/metatrader5/news/5441 | `[StartUp]` に `ShutdownTerminal` が追加された（スクリプト専用）。`MQL_STARTED_FROM_CONFIG` も追加。既存の `[Tester]` の `ShutdownTerminal` とは別物 | B |
 | S-MT5ART20147 | MQL5 記事「Automating Terminal Startup for Service Tasks」 https://www.mql5.com/en/articles/20147 | `[StartUp]` でスクリプトを実行 → 終了し、終了コードを返す | B |
