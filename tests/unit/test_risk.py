@@ -154,7 +154,7 @@ class FakeMT5:
     def symbol_info(self, s):
         return SimpleNamespace(visible=True, volume_min=0.01, volume_step=0.01, volume_max=100.0,
                                trade_contract_size=100000.0, currency_profit="USD", currency_margin="EUR", digits=5,
-                               point=0.00001)
+                               point=0.00001, trade_calc_mode=0)
 
     def symbol_select(self, s, on):
         return True
@@ -174,6 +174,8 @@ def test_snapshot_keeps_only_allowed_fields(tmp_path):
     text = json.dumps(snap)
     assert "12345678" not in text and "Holder" not in text and "Broker-Demo" not in text
     assert snap["margin_per_lot"] == 1100.0 and snap["stress_cost_per_lot"] == 10.0
+    assert abs(snap["profit_to_account"] - 1.0) < 1e-9
+    assert snp.to_account_rate(snap, "USD") == 1.0 and snp.to_account_rate(snap, "EUR") is None
     digest = snp.save(snap, tmp_path / "s.json")
     assert snp.load(tmp_path / "s.json") == (snap, digest)
     snap["account"]["login"] = 1

@@ -31,13 +31,15 @@ from robustlab.storage.db import Database, now_iso
 from robustlab.validation import run as vrun
 
 COMPONENT = "risk"
-VERSION = f"p9-{eng.ENGINE_VERSION}+{sz.SIZING_VERSION}"
+VERSION = f"p9.2-{eng.ENGINE_VERSION}+{sz.SIZING_VERSION}"  # p9.2: backtest P&L converted to the account currency (C81)
+PRE_FX_VERSIONS = ("p9-risk1+size1",)
 STAGE = "ALLOCATION"
 EXIT_OK, EXIT_INPUT, EXIT_RUNTIME = 0, 1, 2
 
 ELIGIBLE, DIAGNOSTIC = "ELIGIBLE", "DIAGNOSTIC"
 NOT_ELIGIBLE_OOS_FAILED = "NOT_ELIGIBLE_OOS_FAILED"
 RISK_UNIT_UNDEFINED = "RISK_UNIT_UNDEFINED"
+CURRENCY_MISMATCH = "CURRENCY_MISMATCH"
 
 REASON_CODES: dict[str, tuple[str, str, str]] = {
     sz.ALLOCATED: ("allocation", "lot computed within every limit (rounded down)", "INFO"),
@@ -46,6 +48,8 @@ REASON_CODES: dict[str, tuple[str, str, str]] = {
     sz.NO_ALLOCATION_MU_LCB: ("allocation", "lower bound of the mean P&L <= 0: no allocation", "FAIL"),
     NOT_ELIGIBLE_OOS_FAILED: ("allocation", "the candidate failed the OOS check (P8b): no allocation", "FAIL"),
     RISK_UNIT_UNDEFINED: ("data", "not a fixed-lot backtest (or no trades): risk per lot is undefined", "FAIL"),
+    CURRENCY_MISMATCH: ("data", "the backtest currency cannot be converted to the account currency", "FAIL"),
+    "FX_AT_SNAPSHOT_RATE": ("allocation", "backtest P&L converted at the snapshot exchange rate (warning)", "WARN"),
     "MARGIN_PRICE_SNAPSHOT": ("allocation", "margin per lot at the snapshot price (warning)", "WARN"),
     "EQUITY_OVERRIDDEN": ("allocation", "equity given on the command line, not from the snapshot (warning)", "WARN"),
 }
@@ -64,6 +68,8 @@ D5_LIMIT_TEXT = ("Known limitation (not verified): tolerance to a PERMANENT chan
                  "does not prevent the losses before it is detected.")
 S1A_TEXT = ("S1a (classic trade shuffle, closed P&L only, no floating loss) is shown for reference only and limits "
             "nothing: on closed equity the same DD threshold measures a smaller quantity (P9_PLAN §6.4).")
+FX_TEXT = ("Currency: the backtest P&L ({tester}) was converted to the account currency ({account}) at the snapshot "
+           "rate {rate:.6g}. Future exchange-rate moves change these amounts; currency risk is NOT modelled.")
 DIAGNOSTIC_TEXT = ("DIAGNOSTIC: this candidate has not passed P8a (or the plan is diagnostic). It is not a candidate "
                    "for allocation; only the risk per lot is shown, and no lot is computed.")
 
@@ -117,25 +123,36 @@ def period_series(db: Database, store: ArtifactStore, job_id: str) -> dict[str, 
                     / float(t["volume"]) for t in closes])
     tracking = env.get("tracking") or {}
     return {"x": x, "d": d, "c": c, "pos": pos, "trades": pnl, "lot": lot, "deposit": dep, "days": len(x),
+            "currency": env.get("account_currency"),
             "max_floating_loss_per_lot": (abs(float(tracking["max_floating_loss"])) / lot
                                           if tracking.get("max_floating_loss") is not None else None),
             "min_margin_level": tracking.get("min_margin_level")}
 
 
-def history_of(db: Database, store: ArtifactStore, plan: dict[str, Any], jobs: dict, cd: str) -> tuple[eng.History,
-                                                                                                         dict]:
+def history_of(db: Database, store: ArtifactStore, plan: dict[str, Any], jobs: dict, cd: str,
+               snap: dict[str, Any]) -> tuple[eng.History, dict]:
+    """Per-lot history in the ACCOUNT currency of the snapshot (converted at the snapshot rate if needed)."""
     names = [vrun.DISCOVERY] + [p["name"] for p in plan["periods"]]
     parts = []
     for n in names:
         if (cd, n) not in jobs:
             raise RiskError(f"no successful single test for {cd} in {n}")
         parts.append(period_series(db, store, jobs[(cd, n)]["job_id"]))
-    h = eng.History(x=np.concatenate([p["x"] for p in parts]), d=np.concatenate([p["d"] for p in parts]),
+    curs = {p["currency"] for p in parts}
+    tester = curs.pop() if len(curs) == 1 else None
+    rate = snp.to_account_rate(snap, tester) if tester else None
+    if rate is None:
+        raise RiskError(f"{CURRENCY_MISMATCH}: backtest currency {sorted(c or '?' for c in curs | {tester})} cannot be "
+                        f"converted to the account currency {snap['account']['currency']} with this snapshot "
+                        "(take a new snapshot with `rlab risk snapshot`, or run the backtests in the account currency)")
+    h = eng.History(x=rate * np.concatenate([p["x"] for p in parts]), d=rate * np.concatenate([p["d"] for p in parts]),
                     c=np.concatenate([p["c"] for p in parts]), pos=np.concatenate([p["pos"] for p in parts]),
-                    seg_lens=tuple(p["days"] for p in parts), trades=np.concatenate([p["trades"] for p in parts]))
+                    seg_lens=tuple(p["days"] for p in parts),
+                    trades=rate * np.concatenate([p["trades"] for p in parts]))
     obs = {"periods": {n: {"job_id": jobs[(cd, n)]["job_id"], "days": p["days"], "lot": p["lot"],
                            "trades": len(p["trades"])} for n, p in zip(names, parts, strict=True)},
-           "max_floating_loss_per_lot": max((p["max_floating_loss_per_lot"] or 0.0) for p in parts),
+           "currency": {"tester": tester, "account": snap["account"]["currency"], "rate": rate},
+           "max_floating_loss_per_lot": rate * max((p["max_floating_loss_per_lot"] or 0.0) for p in parts),
            "min_margin_level": min((p["min_margin_level"] for p in parts if p["min_margin_level"] is not None),
                                    default=None),
            "longest_losing_days": eng.longest_losing_run(h.x, h.seg_lens),
@@ -271,9 +288,10 @@ def run(workspace: Path, plan_id: str, snapshot_path: Path, profile_path: Path, 
             seed = _seed(risk_id, cd)
             res: dict[str, Any] = {"eligibility": status, "eligibility_detail": elig, "seed": seed}
             try:
-                h, obs = history_of(db, store, plan, jobs, cd)
+                h, obs = history_of(db, store, plan, jobs, cd, snap)
             except RiskError as e:
-                res |= {"outcome": RISK_UNIT_UNDEFINED if status == ELIGIBLE else status, "error": str(e)}
+                code = CURRENCY_MISMATCH if str(e).startswith(CURRENCY_MISMATCH) else RISK_UNIT_UNDEFINED
+                res |= {"outcome": code if status == ELIGIBLE else status, "error": str(e)}
                 results[cd] = res
                 continue
             ev_ = evaluate(h, snap, eq, prof, seed, compute_lots=(status == ELIGIBLE))
@@ -331,6 +349,9 @@ def _persist(db: Database, risk_id: str, vp: Any, rnd: Any, cands: list[str], pr
             if res["eligibility"] == DIAGNOSTIC:
                 continue  # principle 3: no decision for a candidate that has not passed P8a
             warnings = ["MARGIN_PRICE_SNAPSHOT"] + (["EQUITY_OVERRIDDEN"] if overridden else [])
+            fx = (res.get("observed") or {}).get("currency") or {}
+            if fx.get("rate") not in (None, 1.0):
+                warnings.append("FX_AT_SNAPSHOT_RATE")
             db.insert("decision", {
                 "decision_id": ids.content_id("dc", {"risk_id": risk_id, "candidate_id": cd}),
                 "candidate_id": cd, "stage": STAGE,
@@ -351,10 +372,15 @@ def summarize(db: Database, risk_id: str) -> dict[str, Any]:
     if ex is None:
         raise RiskError(f"unknown risk execution {risk_id}")
     snap = json.loads(ex["snapshot_json"])
-    results = []
+    results, fx_notes = [], []
     for r in db.all("SELECT * FROM risk_result WHERE risk_id = ? ORDER BY candidate_id", (risk_id,)):
         v = json.loads(r["values_json"])
         results.append({"candidate_id": r["candidate_id"], **v})
+        fx = (v.get("observed") or {}).get("currency") or {}
+        if fx.get("rate") not in (None, 1.0):
+            note = FX_TEXT.format(**fx)
+            if note not in fx_notes:
+                fx_notes.append(note)
     return {"risk_id": risk_id, "plan_id": ex["plan_id"], "symbol": ex["symbol"], "equity": ex["equity"],
             "equity_overridden": bool(ex["equity_overridden"]), "account_currency": snap["account"]["currency"],
             "snapshot_taken_at": snap.get("taken_at"), "volume_min": snap["symbol_info"]["volume_min"],
@@ -362,4 +388,6 @@ def summarize(db: Database, risk_id: str) -> dict[str, Any]:
             "stop_out": {"mode": snap["account"]["margin_so_mode"], "level": snap["account"]["margin_so_so"]},
             "profile": json.loads(ex["profile_json"]), "version": ex["component_version"],
             "created_at": ex["created_at"], "results": results,
-            "notes": [NOT_EVIDENCE_TEXT, ASSUMPTION_TEXT, D5_RESULT_TEXT, D5_LIMIT_TEXT, S1A_TEXT]}
+            "notes": ([f"WARNING: computed by {ex['component_version']}, before the currency fix (C81): amounts may be "
+                       "in the backtest currency, not the account currency. Do not use this execution."]
+                      if ex["component_version"] in PRE_FX_VERSIONS else []) + [NOT_EVIDENCE_TEXT, ASSUMPTION_TEXT, D5_RESULT_TEXT, D5_LIMIT_TEXT, S1A_TEXT] + fx_notes}

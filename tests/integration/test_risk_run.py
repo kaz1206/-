@@ -19,16 +19,19 @@ profiles:
 """
 
 
-def snapshot(tmp, equity=10000.0, vmin=0.01, step=0.01, margin=1100.0, so_mode=0, so=50.0, name="snap.json"):
+def snapshot(tmp, equity=10000.0, vmin=0.01, step=0.01, margin=1100.0, so_mode=0, so=50.0, name="snap.json",
+             currency="USD", profit_to_account=None, currency_profit="USD"):
     p = tmp / name
     p.write_text(json.dumps({
         "version": "snap1", "symbol": "EURUSD", "taken_at": "2026-10-11T00:00:00+00:00",
-        "account": {"currency": "USD", "leverage": 100, "margin_so_mode": so_mode, "margin_so_call": 100.0,
+        "account": {"currency": currency, "leverage": 100, "margin_so_mode": so_mode, "margin_so_call": 100.0,
                     "margin_so_so": so, "equity": equity, "margin_mode": 2},
         "symbol_info": {"volume_min": vmin, "volume_step": step, "volume_max": 100.0, "trade_contract_size": 100000.0,
-                        "currency_profit": "USD", "currency_margin": "EUR", "digits": 5, "point": 0.00001},
+                        "currency_profit": currency_profit, "currency_margin": "EUR", "digits": 5, "point": 0.00001,
+                        "trade_calc_mode": 0},
         "price": {"bid": 1.1, "ask": 1.1001}, "margin_per_lot": margin, "margin_buy": margin, "margin_sell": margin,
-        "stress_width": 0.0001, "stress_cost_per_lot": 10.0}))
+        "stress_width": 0.0001, "stress_cost_per_lot": 10.0 * (profit_to_account or 1.0),
+        "profit_to_account": profit_to_account}))
     return p
 
 
@@ -54,7 +57,7 @@ def test_allocation_end_to_end(opt, monkeypatch, tmp_path):
     assert r["scenarios"]["S1a"]["role"] == "reference"
     d = q(opt, "SELECT * FROM decision WHERE risk_id = ?", (out.risk_id,))
     assert len(d) == 1 and d[0]["stage"] == "ALLOCATION" and d[0]["outcome"] == "ALLOCATED"
-    assert d[0]["plan_id"] == plan_id and d[0]["filter_id"] is None and d[0]["component_version"].startswith("p9-")
+    assert d[0]["plan_id"] == plan_id and d[0]["filter_id"] is None and d[0]["component_version"].startswith("p9.2-")
     # the same input gives the same execution
     again = run(opt.ws, plan_id, snapshot(tmp_path, equity=1_000_000.0), profiles(tmp_path))
     assert again.status == "ALREADY_DONE" and again.risk_id == out.risk_id
@@ -120,3 +123,29 @@ def test_input_checks(opt, monkeypatch, tmp_path):
     (tmp_path / "x.json").write_text(json.dumps(doc))
     assert run(opt.ws, plan_id, tmp_path / "x.json", profiles(tmp_path)).status == "INPUT_INVALID"
     assert run(opt.ws, "vp_none", snapshot(tmp_path), profiles(tmp_path)).status == "INPUT_INVALID"
+
+
+def test_backtest_currency_is_converted_to_the_account_currency(opt, monkeypatch, tmp_path):
+    plan_id, cd = p8a_pass(opt, monkeypatch)
+    usd = run(opt.ws, plan_id, snapshot(tmp_path, equity=1_000_000.0), profiles(tmp_path)).summary["results"][0]
+    jpy = run(opt.ws, plan_id, snapshot(tmp_path, equity=150_000_000.0, margin=1100.0 * 150, currency="JPY",
+                                        profit_to_account=150.0, name="jpy.json"), profiles(tmp_path))
+    r = jpy.summary["results"][0]
+    assert r["observed"]["currency"] == {"tester": "USD", "account": "JPY", "rate": 150.0}
+    q50 = usd["scenarios"]["S0"]["per_lot"]["max_dd_per_lot_q50"]
+    assert abs(r["scenarios"]["S0"]["per_lot"]["max_dd_per_lot_q50"] - 150.0 * q50) < 1e-6 * 150 * q50
+    assert any("converted to the account currency (JPY)" in n for n in jpy.summary["notes"])
+    d = q(opt, "SELECT warning_codes_json FROM decision WHERE risk_id = ?", (jpy.risk_id,))
+    assert "FX_AT_SNAPSHOT_RATE" in json.loads(d[0]["warning_codes_json"])
+    # the same account in JPY gets about the same lot as the same account in USD (equity scaled by the rate)
+    assert abs(r["lot_raw"] - usd["lot_raw"]) <= 0.05 * usd["lot_raw"]
+
+
+def test_unconvertible_currency_is_refused(opt, monkeypatch, tmp_path):
+    plan_id, cd = p8a_pass(opt, monkeypatch)
+    out = run(opt.ws, plan_id, snapshot(tmp_path, equity=1e8, currency="JPY", currency_profit="CHF",
+                                        profit_to_account=120.0, name="chf.json"), profiles(tmp_path))
+    r = out.summary["results"][0]
+    assert r["outcome"] == "CURRENCY_MISMATCH" and "lot" not in r
+    d = q(opt, "SELECT * FROM decision WHERE risk_id = ?", (out.risk_id,))
+    assert d[0]["outcome"] == "NOT_ALLOCATED" and json.loads(d[0]["reason_codes_json"]) == ["CURRENCY_MISMATCH"]

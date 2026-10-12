@@ -374,5 +374,18 @@ B の場合の D5 の扱い: S63 の副次的な効果で、D5（1.5 倍）も�
 
 1. 業者スナップショット: `uv run rlab risk snapshot --symbol EURUSD --out workspace\risk_snapshots\EURUSD.json` → 端末の「仕様」画面（最小ロット・刻み・契約サイズ）と口座情報（ストップアウト水準）と一致するか、JSON に口座番号・名義・サーバー名がないかを確認。
 2. 本物の候補（P8a は診断モード）: `uv run rlab risk run vp_a080da87b2f754a7 --snapshot workspace\risk_snapshots\EURUSD.json` → **DIAGNOSTIC**（ロットなし・判定なし）。
-3. 練習用ワークスペースの P8a 合格者（練習の OOS は FAIL）: `uv run rlab risk run vp_0602f43f60ef0ffa --snapshot workspace\risk_snapshots\EURUSD.json --workspace workspace_rehearsal` → **NOT_ELIGIBLE_OOS_FAILED**（ロットなし）。
+3. 練習用ワークスペース: `uv run rlab risk run vp_0602f43f60ef0ffa --snapshot workspace\risk_snapshots\EURUSD.json --workspace workspace_rehearsal` → **DIAGNOSTIC**（訂正: 当初は NOT_ELIGIBLE_OOS_FAILED と見込んだが、練習用の P8a 計画は `--diagnostic` で作ったもので P8a の合格者ではない。DIAGNOSTIC が正しい）。
 4. 本番の Holdout は封印したまま。
+
+### 9.3 実機確認の結果（2026-10-12、Windows・デモ口座、1 回目）
+
+| 項目 | 結果 |
+|---|---|
+| `MetaTrader5` パッケージ | 依存関係への入れ忘れを修正（§9 冒頭） |
+| スナップショット 1 回目 | 「no price for EURUSD」→ 選択直後の銘柄の価格を最大 10 秒待つよう修正 |
+| スナップショット 2 回目 | 成功。口座: JPY、レバレッジ 100、ストップアウト 30%（percent モード）、マージンコール 50%。EURUSD: 最小 0.01・刻み 0.01・最大 500・契約 100,000。必要証拠金 177,384 円/ロット（= 1,000 EUR × 約 177.4 円）、ストレス幅 0.0001 の金額 1,583 円/ロット（= 10 USD × 約 158.3 円）。口座番号・名義・サーバー名は出力されず。週末のため bid = ask |
+| 本物の候補 `cd_b94d50a54395ef54`（vp_a080da87b2f754a7） | DIAGNOSTIC（ロット・判定なし）= 期待どおり |
+| 練習用（vp_0602f43f60ef0ffa） | DIAGNOSTIC = 正しい（上の訂正を参照） |
+| **見つかった欠陥** | バックテスト（USD）の金額を口座（JPY）の金額として扱っていた（C81）。1 ロットあたりの DD などが約 158 分の 1 に表示されていた。**P8a 合格者ならロットを約 158 倍に過大評価していた**。今回の 2 つの実行（`rk_2629fc8b24d71f93`、`rk_f16eb66a7dc894fe`）は修正前の版で、使わない（表示に警告が出る） |
+
+修正（C81）: スナップショットにレート（損益通貨 → 口座通貨）を記録し、バックテストの損益を口座通貨に換算。換算できなければ `CURRENCY_MISMATCH`。結合テストで「JPY 口座でも同じ規模の USD 口座とほぼ同じロットになる」ことと、換算できない組み合わせの拒否を確認。修正後のスナップショットと 2 つの実行を取り直す（2 回目の実機確認）。

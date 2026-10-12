@@ -19,7 +19,10 @@ from typing import Any
 SNAPSHOT_VERSION = "snap1"
 ACCOUNT_FIELDS = ("currency", "leverage", "margin_so_mode", "margin_so_call", "margin_so_so", "equity", "margin_mode")
 SYMBOL_FIELDS = ("volume_min", "volume_step", "volume_max", "trade_contract_size", "currency_profit",
-                 "currency_margin", "digits", "point")
+                 "currency_margin", "digits", "point", "trade_calc_mode")
+# SYMBOL_CALC_MODE_FOREX, _CFD, _CFDLEVERAGE, _FOREX_NO_LEVERAGE: profit = (close - open) * contract size * lots in
+# the profit currency, so order_calc_profit / (width * contract size) is the profit-to-account currency rate
+LINEAR_CALC_MODES = (0, 2, 4, 5)
 STOPOUT_MODE_PERCENT, STOPOUT_MODE_MONEY = 0, 1  # ACCOUNT_STOPOUT_MODE_PERCENT / _MONEY
 
 
@@ -66,16 +69,34 @@ def take(mt5: Any, symbol: str, width: float) -> dict[str, Any]:
             "version": SNAPSHOT_VERSION, "symbol": symbol,
             "taken_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
             "account": {k: getattr(acc, k) for k in ACCOUNT_FIELDS},
-            "symbol_info": {k: getattr(info, k) for k in SYMBOL_FIELDS},
+            "symbol_info": {k: getattr(info, k, None) for k in SYMBOL_FIELDS},
             "price": {"bid": tick.bid, "ask": tick.ask},
             "margin_per_lot": max(float(m_buy), float(m_sell)), "margin_buy": float(m_buy),
             "margin_sell": float(m_sell),
             "stress_width": width, "stress_cost_per_lot": abs(float(cost)),
         }
+        mode, size = info_mode(snap), float(info.trade_contract_size or 0)
+        snap["profit_to_account"] = (abs(float(cost)) / (width * size)
+                                     if mode in LINEAR_CALC_MODES and size > 0 and width > 0 else None)
     finally:
         mt5.shutdown()
     validate(snap)
     return snap
+
+
+def info_mode(snap: dict[str, Any]) -> int | None:
+    m = snap["symbol_info"].get("trade_calc_mode")
+    return int(m) if m is not None else None
+
+
+def to_account_rate(snap: dict[str, Any], tester_currency: str) -> float | None:
+    """Rate from the backtest (tester) currency to the account currency, or None if it cannot be derived."""
+    acc = snap["account"]["currency"]
+    if tester_currency == acc:
+        return 1.0
+    if tester_currency == snap["symbol_info"].get("currency_profit") and snap.get("profit_to_account"):
+        return float(snap["profit_to_account"])
+    return None
 
 
 def validate(snap: dict[str, Any]) -> None:
