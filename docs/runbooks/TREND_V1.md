@@ -43,7 +43,7 @@ Get-Process terminal64 -ErrorAction SilentlyContinue | Where-Object { $_.Path -e
 ```powershell
 .\.venv\Scripts\rlab.exe metrics compute --all
 ```
-- 期待: 新しいジョブの行に `OK`（`MISMATCH` が出たら止めて送る）。
+- 期待: 新しいジョブの行が `computed (…)`、過去のジョブは `already computed (…)`。行の末尾に `MISMATCH:` が出たら止めて送ってください。
 
 ### 5. P3 最適化（25 パス）
 
