@@ -1248,6 +1248,9 @@ def null_fidelity_compare(run_id: str | None = typer.Argument(None, help="Defaul
         typer.echo(f"{k}: {res[k]}")
     for m in res["first"]:
         typer.echo(f"  #{m['i']}: model {m['model']} | tester {m['tester']}")
+    typer.echo("diagnosis (does not change the verdict above):")
+    for k, v in res["diagnosis"].items():
+        typer.echo(f"  {k}: {v}")
     raise typer.Exit(0 if res["match"] else 2)
 
 

@@ -153,7 +153,10 @@ def test_fidelity_export_and_model(tmp_path):
     assert all(a.time <= b.time for a, b in zip(deals, deals[1:], strict=False))
     # a tester record identical to the model matches; a shifted one does not
     rows = [{"ticket": str(i), "time": d.time.strftime("%Y.%m.%d %H:%M:%S"), "type": "0" if d.side == "buy" else "1",
-             "entry": "0" if d.entry == "in" else "1", "price": f"{d.price:.5f}"} for i, d in enumerate(deals)]
-    assert fd.compare(deals, rows)["match"]
+             "entry": "0" if d.entry == "in" else "1", "price": f"{d.price:.5f}", "profit": "0.0", "comment": ""}
+            for i, d in enumerate(deals)]
+    res = fd.compare(deals, rows)
+    assert res["match"] and res["diagnosis"]["same_side_entry_price"] == len(deals)
+    assert res["diagnosis"]["time_offsets_seconds"] == [0]
     rows[0]["price"] = f"{deals[0].price + 0.0001:.5f}"
     assert fd.compare(deals, rows)["mismatches"] == 1

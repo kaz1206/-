@@ -142,5 +142,15 @@ def compare(model: list[Deal], tester: list[dict[str, str]]) -> dict[str, Any]:
         if not same:
             mism.append({"i": i, "model": a and a.__dict__ | {"time": str(a.time)},
                          "tester": b and b.__dict__ | {"time": str(b.time)}})
+    # diagnosis only (the verdict above stays the strict, pre-registered comparison)
+    pairs = list(zip(model, got, strict=False))
+    same = [a.side == b.side and a.entry == b.entry and abs(a.price - b.price) < 0.5 * POINT for a, b in pairs]
+    offsets = sorted({int((b.time - a.time).total_seconds()) for a, b in pairs})
+    extra = [{"time": d["time"], "type": d["type"], "entry": d["entry"], "price": d["price"], "comment": d["comment"]}
+             for d in rows[len(model):]]
+    diagnosis = {"pairs": len(pairs), "same_side_entry_price": int(sum(same)), "time_offsets_seconds": offsets[:10],
+                 "extra_tester_deals": extra[:5],
+                 "tester_profit_sum": round(sum(float(d["profit"]) for d in rows), 2),
+                 "tester_profit_nonzero_deals": sum(1 for d in rows if float(d["profit"]) != 0.0)}
     return {"model_deals": len(model), "tester_deals": len(got), "mismatches": len(mism), "first": mism[:5],
-            "match": not mism}
+            "match": not mism, "diagnosis": diagnosis}
