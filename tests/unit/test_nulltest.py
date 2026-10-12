@@ -131,3 +131,25 @@ def test_config_guards(tmp_path):
                   ROOT / "configs" / "strategy_profiles.yaml").status == "INPUT_INVALID"
     assert nr.run(tmp_path, "A1", "whatever", ROOT / "configs" / "null_archetypes.yaml",
                   ROOT / "configs" / "strategy_profiles.yaml").status == "INPUT_INVALID"
+
+
+def test_fidelity_export_and_model(tmp_path):
+    from robustlab.nulltest import fidelity as fd
+
+    info = fd.export(tmp_path / "h0.csv", 3, PM, 1.10)
+    lines = (tmp_path / "h0.csv").read_text().splitlines()
+    assert info["rows"] == len(lines) == 3 * 48 * 30
+    first = lines[0].split(",")
+    assert int(first[0]) == int(fd.START.replace(tzinfo=__import__("datetime").UTC).timestamp()) and first[6] == "10"
+    # the model on a hand-made path: closes rise then fall -> one buy, then close + sell
+    n_days = 40
+    path = fd.path_of(n_days, PM, 1.10)
+    deals = fd.smoketest_model(path, n_days, 2, 5, PM)
+    assert deals and deals[0].entry == "in"
+    assert all(a.time <= b.time for a, b in zip(deals, deals[1:], strict=False))
+    # a tester record identical to the model matches; a shifted one does not
+    rows = [{"ticket": str(i), "time": d.time.strftime("%Y.%m.%d %H:%M:%S"), "type": "0" if d.side == "buy" else "1",
+             "entry": "0" if d.entry == "in" else "1", "price": f"{d.price:.5f}"} for i, d in enumerate(deals)]
+    assert fd.compare(deals, rows)["match"]
+    rows[0]["price"] = f"{deals[0].price + 0.0001:.5f}"
+    assert fd.compare(deals, rows)["mismatches"] == 1

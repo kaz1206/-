@@ -1182,5 +1182,74 @@ def null_show(null_id: str, workspace: Path = WORKSPACE, as_json: bool = typer.O
     _emit(s, True) if as_json else _print_null_summary(s)
 
 
+@null_app.command("fidelity-export")
+def null_fidelity_export(days: int = typer.Option(260, "--days"),
+                         terminal: Path = typer.Option(Path("configs/terminal.yaml"), "--terminal"),
+                         config: Path = typer.Option(Path("configs/null_archetypes.yaml"), "--config"),
+                         out: Path | None = typer.Option(None, "--out", help="Default: <Common\\Files>/RL_H0_EURUSD_M1.csv")) -> None:
+    """Write the synthetic H0 M1 bars for the custom symbol (P10 fidelity check)."""
+    from robustlab.config.loader import ConfigError, load_terminal_config
+    from robustlab.nulltest import fidelity as fd
+    from robustlab.nulltest import sim
+    from robustlab.nulltest.run import load_config
+
+    cfg, _ = load_config(config)
+    if out is None:
+        try:
+            out = load_terminal_config(terminal).common_files_dir / "RL_H0_EURUSD_M1.csv"
+        except (ConfigError, OSError) as e:
+            typer.echo(f"no --out and no terminal config: {e}", err=True)
+            raise typer.Exit(1) from e
+    info = fd.export(out, days, sim.PriceModel(**cfg["price"]), cfg["account"]["start_price"])
+    typer.echo(f"written: {out}")
+    for k, v in info.items():
+        typer.echo(f"{k}: {v}")
+    typer.echo("next: run mql5/Scripts/RobustLab/RL_ImportH0.mq5 on a chart, then "
+               "`rlab backtest run configs/requests/p10_fidelity_h4.yaml --workspace workspace_p10fid`")
+
+
+@null_app.command("fidelity-compare")
+def null_fidelity_compare(run_id: str | None = typer.Argument(None, help="Default: the latest successful run on "
+                                                                         "RL_H0_EURUSD in the workspace"),
+                          days: int = typer.Option(260, "--days"),
+                          fast: int = typer.Option(12, "--fast"), slow: int = typer.Option(48, "--slow"),
+                          config: Path = typer.Option(Path("configs/null_archetypes.yaml"), "--config"),
+                          workspace: Path = WORKSPACE) -> None:
+    """Compare the tester's deals with the exact RL_SmokeTest rules on the same synthetic prices."""
+    from robustlab.mt5 import telemetry_reader as tr
+    from robustlab.nulltest import fidelity as fd
+    from robustlab.nulltest import sim
+    from robustlab.nulltest.run import load_config
+    from robustlab.storage.artifacts import ArtifactStore
+
+    cfg, _ = load_config(config)
+    pm = sim.PriceModel(**cfg["price"])
+    db = _open(workspace)
+    try:
+        if run_id is None:
+            job = db.one("SELECT j.job_id, j.run_id FROM job j JOIN run r USING (run_id) JOIN candidate c USING "
+                         "(candidate_id) WHERE c.symbol = ? AND j.status = 'SUCCEEDED' ORDER BY j.created_at DESC "
+                         "LIMIT 1", (fd.SYMBOL,))
+        else:
+            job = db.one("SELECT job_id, run_id FROM job WHERE run_id = ? AND status = 'SUCCEEDED' ORDER BY job_id "
+                         "DESC LIMIT 1", (run_id,))
+        if job is None:
+            typer.echo(f"no successful job for {run_id or fd.SYMBOL}", err=True)
+            raise typer.Exit(1)
+        typer.echo(f"run: {job['run_id']}  job: {job['job_id']}")
+        row = db.one("SELECT sha256 FROM job_artifact WHERE job_id = ? AND role = 'telemetry_deals'", (job["job_id"],))
+        text = ArtifactStore(workspace.resolve() / "artifacts", db).read(row["sha256"]).decode("utf-8-sig")
+    finally:
+        db.close()
+    deals = tr.parse_csv_text(text, tr.DEALS_COLUMNS, "deals")
+    model = fd.smoketest_model(fd.path_of(days, pm, cfg["account"]["start_price"]), days, fast, slow, pm)
+    res = fd.compare(model, deals)
+    for k in ("model_deals", "tester_deals", "mismatches", "match"):
+        typer.echo(f"{k}: {res[k]}")
+    for m in res["first"]:
+        typer.echo(f"  #{m['i']}: model {m['model']} | tester {m['tester']}")
+    raise typer.Exit(0 if res["match"] else 2)
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()
