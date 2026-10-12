@@ -13,8 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 10  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
-#                     6: P6 statistics; 7: P7 selection; 8: P8a validation; 9: P8b OOS; 10: P9 risk
+SCHEMA_VERSION = 11  # 2: P2 metrics; 3: P3 optimization; 4: P4 filter/evaluation/decision; 5: P5 robustness;
+#                     6: P6 statistics; 7: P7 selection; 8: P8a validation; 9: P8b OOS; 10: P9 risk; 11: P10 null
 
 _APPEND_ONLY = (
     "partition_registry",
@@ -50,6 +50,7 @@ _APPEND_ONLY = (
     "oos_access_log",
     "risk_execution",
     "risk_result",
+    "null_execution",
 )
 
 _DDL = """
@@ -520,6 +521,25 @@ CREATE TABLE IF NOT EXISTS risk_result (
     PRIMARY KEY (risk_id, candidate_id)
 );
 
+CREATE TABLE IF NOT EXISTS null_execution (
+    null_id TEXT PRIMARY KEY,
+    archetype TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    rounds INTEGER NOT NULL,
+    seed INTEGER NOT NULL,
+    evidence_seeding TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    config_hash TEXT NOT NULL,
+    profiles_hash TEXT NOT NULL,
+    component_name TEXT NOT NULL,
+    component_version TEXT NOT NULL,
+    verdict TEXT NOT NULL,
+    criterion_json TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS decision (
     decision_id TEXT PRIMARY KEY,
     candidate_id TEXT NOT NULL REFERENCES candidate(candidate_id),
@@ -602,7 +622,7 @@ class Database:
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 self.conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
-            elif row["version"] in (1, 2, 3, 4, 5, 6, 7, 8, 9):
+            elif row["version"] in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
                 # every step so far only adds tables (created above by the idempotent DDL)
                 self.conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
             elif row["version"] != SCHEMA_VERSION:

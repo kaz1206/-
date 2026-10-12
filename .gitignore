@@ -1,5 +1,6 @@
 # local runtime data (DB, artifacts, logs: logs contain account login and IP address)
 workspace/
+workspace_*/
 # per-machine terminal settings
 configs/terminal.yaml
 # verification results (contain account/IP information)

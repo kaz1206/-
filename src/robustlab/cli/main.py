@@ -31,6 +31,8 @@ robust_app = typer.Typer(no_args_is_help=True, help="Robustness: neighbourhood s
 app.add_typer(robust_app, name="robust")
 oos_app = typer.Typer(no_args_is_help=True, help="P8b OOS: one manifest, one run, the holdout is burned")
 app.add_typer(oos_app, name="oos")
+null_app = typer.Typer(no_args_is_help=True, help="P10 null-hypothesis test: chance pass rate of the pipeline")
+app.add_typer(null_app, name="null")
 risk_app = typer.Typer(no_args_is_help=True, help="P9 risk and allocation (lots only for P8a passes, never rounded up)")
 app.add_typer(risk_app, name="risk")
 validate_app = typer.Typer(no_args_is_help=True, help="P8a validation in new periods (fixed parameters)")
@@ -1117,6 +1119,67 @@ def risk_show(risk_id: str, candidate: str | None = typer.Option(None, "--candid
         _emit(s, True)
     else:
         _print_risk_summary(s, candidate)
+
+
+def _print_null_summary(s: dict) -> None:
+    for k in ("null_id", "archetype", "mode", "kind", "rounds", "seed", "evidence_seeding", "version", "created_at"):
+        typer.echo(f"{k}: {s[k]}")
+    r = s["result"]
+    c = s["criterion"]
+    typer.echo(f"verdict: {s['verdict']}"
+               + (f"  (criterion: one-sided 95% upper bound <= {c['max_upper_bound']:.0%})" if s["mode"] == "judgement"
+                  else "  (not a judgement)"))
+    typer.echo(f"chance pass: {r['pass_rounds']} of {r['rounds']} rounds = {r['pass_rate']:.4f}; 95% CI "
+               f"{r['ci']['lower']:.4f}-{r['ci']['upper']:.4f}; one-sided upper {r['ci']['upper_one_sided']:.4f}")
+    typer.echo(f"per round: P4 passes {r['p4_mean']:.2f}, selected {r['selected_mean']:.2f}")
+    typer.echo(f"S1: mean gross P&L {r['s1']['gross_mean']:.2f} (SE {r['s1']['se']:.2f}, z {r['s1']['z']:.2f}; "
+               f"must be within {c['s1_max_se']} SE)")
+    if r["passers"]:
+        ci = r["passers_ruined_ci"]
+        typer.echo(f"passers: {r['passers']}; ruined in the next year {r['passers_ruined_next_year']} (95% CI "
+                   f"{ci['lower']:.3f}-{ci['upper']:.3f}); next-year net mean {r['passers_next_year_net_mean']:.1f}")
+    if r.get("s3"):
+        x = r["s3"]
+        typer.echo(f"S3: lanes never stopped out in D+V0+V1 {x['lanes']} of {x['of']}; P(stop-out next year) EA re-run "
+                   f"{x['structural']:.3f} vs shuffle of its own closed P&L {x['naive_shuffle']:.4f}")
+    for n in s["notes"]:
+        typer.echo(f"note: {n}")
+
+
+@null_app.command("run")
+def null_run(archetype: str = typer.Option(..., "--archetype"),
+             mode: str = typer.Option(..., "--mode", help="judgement (once), reproduction or power"),
+             config: Path = typer.Option(Path("configs/null_archetypes.yaml"), "--config"),
+             profiles: Path = typer.Option(Path("configs/strategy_profiles.yaml"), "--profiles"),
+             workspace: Path = WORKSPACE) -> None:
+    from robustlab.nulltest.run import run
+
+    def progress(done: int, total: int) -> None:
+        typer.echo(f"  {done}/{total} rounds", err=True)
+
+    out = run(workspace, archetype, mode, config, profiles, progress)
+    typer.echo(f"status: {out.status}")
+    if out.message:
+        typer.echo(f"message: {out.message}")
+    if out.summary:
+        _print_null_summary(out.summary)
+    raise typer.Exit(out.exit_code)
+
+
+@null_app.command("show")
+def null_show(null_id: str, workspace: Path = WORKSPACE, as_json: bool = typer.Option(False, "--json")) -> None:
+    from robustlab.nulltest.run import NullError, summarize
+
+    db = _open(workspace)
+    try:
+        try:
+            s = summarize(db, null_id)
+        except NullError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1) from e
+    finally:
+        db.close()
+    _emit(s, True) if as_json else _print_null_summary(s)
 
 
 if __name__ == "__main__":  # pragma: no cover

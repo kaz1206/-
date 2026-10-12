@@ -1,0 +1,98 @@
+# P10 reproduction (400 rounds, seed 20261012, prototype bootstrap seeding) - production code, rlab null run --mode reproduction
+status: DONE
+null_id: nl_f93b35a680951336
+archetype: A1
+mode: reproduction
+kind: null
+rounds: 400
+seed: 20261012
+evidence_seeding: prototype
+version: p10-sim2+pipe1
+created_at: 2026-10-12T04:36:31.543+00:00
+verdict: RECORDED  (not a judgement)
+chance pass: 0 of 400 rounds = 0.0000; 95% CI 0.0000-0.0092; one-sided upper 0.0075
+per round: P4 passes 1.12, selected 0.14
+S1: mean gross P&L 35.53 (SE 57.07, z 0.62; must be within 3.0 SE)
+status: DONE
+null_id: nl_5efa0d92aef91034
+archetype: A2
+mode: reproduction
+kind: null
+rounds: 400
+seed: 20261012
+evidence_seeding: prototype
+version: p10-sim2+pipe1
+created_at: 2026-10-12T04:37:50.713+00:00
+verdict: RECORDED  (not a judgement)
+chance pass: 2 of 400 rounds = 0.0050; 95% CI 0.0006-0.0179; one-sided upper 0.0157
+per round: P4 passes 1.31, selected 0.12
+S1: mean gross P&L -101.33 (SE 253.10, z -0.40; must be within 3.0 SE)
+passers: 2; ruined in the next year 0 (95% CI 0.000-0.842); next-year net mean 2879.9
+status: DONE
+null_id: nl_83a903726821c03f
+archetype: A3
+mode: reproduction
+kind: null
+rounds: 400
+seed: 20261012
+evidence_seeding: prototype
+version: p10-sim2+pipe1
+created_at: 2026-10-12T04:38:22.151+00:00
+verdict: RECORDED  (not a judgement)
+chance pass: 11 of 400 rounds = 0.0275; 95% CI 0.0138-0.0487; one-sided upper 0.0451
+per round: P4 passes 1.77, selected 0.17
+S1: mean gross P&L 81.94 (SE 191.15, z 0.43; must be within 3.0 SE)
+passers: 11; ruined in the next year 3 (95% CI 0.060-0.610); next-year net mean -492.6
+S3: lanes never stopped out in D+V0+V1 404 of 1250; P(stop-out next year) EA re-run 0.121 vs shuffle of its own closed P&L 0.0000
+
+[exited with code 0]
+
+# P10 JUDGEMENT (1,000 rounds per archetype, seed 20261013, once) - rlab null run --mode judgement
+status: DONE
+null_id: nl_9b8d869f4a4bcbea
+archetype: A1
+mode: judgement
+kind: null
+rounds: 1000
+seed: 20261013
+evidence_seeding: global
+version: p10-sim2+pipe1
+created_at: 2026-10-12T04:41:19.827+00:00
+verdict: MET  (criterion: one-sided 95% upper bound <= 5%)
+chance pass: 3 of 1000 rounds = 0.0030; 95% CI 0.0006-0.0087; one-sided upper 0.0077
+per round: P4 passes 1.13, selected 0.13
+S1: mean gross P&L 22.64 (SE 34.88, z 0.65; must be within 3.0 SE)
+passers: 3; ruined in the next year 0 (95% CI 0.000-0.708); next-year net mean 211.0
+status: DONE
+null_id: nl_8b729fe124078c3b
+archetype: A2
+mode: judgement
+kind: null
+rounds: 1000
+seed: 20261013
+evidence_seeding: global
+version: p10-sim2+pipe1
+created_at: 2026-10-12T04:44:34.042+00:00
+verdict: MET  (criterion: one-sided 95% upper bound <= 5%)
+chance pass: 14 of 1000 rounds = 0.0140; 95% CI 0.0077-0.0234; one-sided upper 0.0218
+per round: P4 passes 1.44, selected 0.14
+S1: mean gross P&L 83.95 (SE 157.83, z 0.53; must be within 3.0 SE)
+passers: 14; ruined in the next year 0 (95% CI 0.000-0.232); next-year net mean -969.7
+status: DONE
+null_id: nl_66cca9f137cd2d21
+archetype: A3
+mode: judgement
+kind: null
+rounds: 1000
+seed: 20261013
+evidence_seeding: global
+version: p10-sim2+pipe1
+created_at: 2026-10-12T04:45:35.573+00:00
+verdict: MET  (criterion: one-sided 95% upper bound <= 5%)
+chance pass: 28 of 1000 rounds = 0.0280; 95% CI 0.0187-0.0402; one-sided upper 0.0382
+per round: P4 passes 1.69, selected 0.21
+S1: mean gross P&L 19.63 (SE 123.31, z 0.16; must be within 3.0 SE)
+passers: 28; ruined in the next year 4 (95% CI 0.040-0.327); next-year net mean 304.3
+S3: lanes never stopped out in D+V0+V1 387 of 1250; P(stop-out next year) EA re-run 0.145 vs shuffle of its own closed P&L 0.0000
+
+[exited with code 0]

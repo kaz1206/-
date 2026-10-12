@@ -1,7 +1,7 @@
 # CLAUDE.md — MT5 EA Robustness Lab
 
 MT5 Strategy Tester を使い、EA のロバスト性・過学習耐性・DD/破産リスクを評価し、資金配分まで決める研究基盤。
-P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複数期間検証）も完了（実機は診断モードで確認）。P8b（OOS）も完了（練習用ワークスペースで一度きりの実行・封印・再実行の拒否を実機確認）。**本番の Holdout は封印したまま。本物の EA で P8a の合格者が出るまで使わない。** P9（リスクと資金配分）も完了（実機は診断モードで確認。通貨換算の欠陥を実機で発見・修正、C81）。次は P10 の計画。
+P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複数期間検証）も完了（実機は診断モードで確認）。P8b（OOS）も完了（練習用ワークスペースで一度きりの実行・封印・再実行の拒否を実機確認）。**本番の Holdout は封印したまま。本物の EA で P8a の合格者が出るまで使わない。** P9（リスクと資金配分）も完了（実機は診断モードで確認。通貨換算の欠陥を実機で発見・修正、C81）。P10（帰無仮説テスト）は実装・判定済み（A1 0.30%・A2 1.40%・A3 2.80%、すべて上側限界 ≤ 5%）、実機の忠実度チェック待ち。
 
 ## 主要ドキュメント
 
@@ -9,6 +9,7 @@ P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
 - 設計変更履歴: `docs/DESIGN_CHANGELOG.md`
+- P10 計画（判定済み、C82〜C84）: `docs/plans/P10_PLAN.md`、設定: `configs/null_archetypes.yaml`、試算: `docs/research/p10_simulations/`、判定の記録: `docs/research/p10_validation/`
 - P9 計画（完了、C77〜C81）: `docs/plans/P9_PLAN.md`、プロファイル: `configs/risk_profiles.yaml`、事前シミュレーション: `docs/research/p9_simulations/`、再検証: `docs/research/p9_validation/`
 - P8b 計画（完了、C74〜C76）: `docs/plans/P8B_PLAN.md`、練習用の設定: `configs/rehearsal/`
 - P8 計画（P8a 完了、C71〜C73）: `docs/plans/P8_PLAN.md`、検証計画: `configs/validation_plans/`、追加コスト: `configs/cost_stress.yaml`
@@ -56,6 +57,7 @@ P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複
 - P8a: 検証計画は実行前にロックし、変更は新しい計画（`VALIDATION_REVISED`）。結果を見た期間は露出台帳に残り、それより後に作ったラウンドの検証には使えない。統計ゲートの不合格は「証拠不足」でエッジなしではない。診断モードの結果は判定に使わない。
 - P8b: マニフェストはワークスペースに 1 つ、実行は一度きりで最初のジョブ前に Holdout を燃やす。OOS の PASS は「事前の基準に反証されなかった」、FAIL は「エッジ消失の証明ではない」。シミュレーションの数字は実際の EA の誤判定率ではない。
 - P9: ロットを出すのは P8a で PASS（診断ではない計画）の候補だけ。それ以外は DIAGNOSTIC（1 ロットあたりの指標のみ、ロット・判定なし）。P8b FAIL は配分しない。練習用ワークスペースの OOS は信頼度を上げない。安全ロットは DD・破産・ストップアウトの 3 制約をすべての制約用シナリオ（S0・S1b・S2〜S6・S63、生き残りは SC も）で同時に満たす最大値（95% 上側信頼限界）。ロットは常に切り捨て、最小ロット未満は `INFEASIBLE_MIN_LOT`。切り上げ・制約の緩和の経路を作らない。S1a（含み損なしの取引シャッフル）は参考指標。P9 で安全に見えても優位性の証拠ではない。恒久的な体制変化への耐性は未検証（D5 の 1.5 倍の試算結果とは分けて表示）。Holdout のデータは使わない。バックテストの通貨と口座の通貨が違うときはスナップショット時点のレートで換算し、換算できなければ `CURRENCY_MISMATCH`（C81）。
+- P10: 帰無仮説は EA の仕組みを予測できる構造のない価格で再実行する（損益のシャッフルは使わない）。判定は型ごとに 1,000 ラウンド・固定シードで 1 回だけ、上側限界 ≤ 5%。S1 不合格の実行は無効、S1 の通過は H0 の証明ではない。偶然の合格率と合格後の破綻リスク（マーチン）は別に扱う。
 - P7 で選ばれたことはエッジの証拠ではない（エッジなしの合成データでも 73% の回で何かが選ばれる）。P7 は P8・P10 に進める候補を絞る段階。P7 の判定は `filter_id` を空にして `sel_id` で結ぶ。
 
 ## 実行環境メモ
@@ -75,6 +77,7 @@ P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複
 - CLI（P7）: `rlab select run <round_id> --filter <fl> --robust <rb> --stats <st> [--profile default]` / `rlab select show <sel_id> [--candidate <cd>]`
 - CLI（P8a）: `rlab validate lock <sel_id> --plan <yaml> [--diagnostic --candidate <cd>]` / `rlab validate run <plan_id>` / `rlab validate show <plan_id> [--candidate <cd>]`（閲覧は記録される）
 - CLI（P8b）: `rlab oos lock <plan_id> [--rehearsal --candidate <cd>]` / `rlab oos run <manifest_id> --i-understand-this-is-final` / `rlab oos show <manifest_id>`（練習は `--workspace workspace_rehearsal --partition configs/rehearsal/data_partition.yaml`）
+- CLI（P10）: `rlab null run --archetype A1|A2|A3 --mode judgement|reproduction|power` / `rlab null show <null_id>`（判定は設定に固定、2 回目は拒否）
 - CLI（P9）: `rlab risk snapshot --symbol <sym> --out <json>`（Windows のみ。MT5 を起動・ログインして実行。口座番号・名義・サーバー名は保存しない）/ `rlab risk run <plan_id> --snapshot <json> [--equity N] [--candidate <cd>]` / `rlab risk show <risk_id> [--candidate <cd>]`
 - CLI（P5）: `rlab robust run <round_id> --filter <filter_id>` / `rlab robust show <robust_id> [--candidate <cd>]` / `rlab robust map <robust_id> [--metric score|robust]`
 - 終了コード: 0 成功、1 設定・入力エラー、2 実行時の失敗、3 Holdout Guard による拒否
