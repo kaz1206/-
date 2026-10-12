@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
 //| RL_ImportH0.mq5                                                  |
-//| P10 fidelity check: builds the custom symbol RL_H0_EURUSD from   |
+//| P10 fidelity check: builds the custom symbol EURUSD_RLH0 from    |
 //| synthetic M1 bars (Common\Files\RL_H0_EURUSD_M1.csv, written by  |
 //| `rlab null fidelity-export`). Copies the properties of EURUSD,   |
 //| fixes the spread at 10 points. Synthetic data only: never trade. |
@@ -9,14 +9,17 @@
 //| size / value at 0, so every deal profit was 0 (found 2026-10-12). |
 //| The currencies and the tick size are now read from the origin    |
 //| symbol at run time and set explicitly (no hand-typed values).    |
+//| v1.02: setting the currencies returned true but did not change   |
+//| them (still "RL_" / "H0_"); for a FOREX symbol they follow the   |
+//| first 6 letters of the name. The symbol is now EURUSD_RLH0.      |
 //| API: CustomSymbolCreate / CustomRatesReplace / SymbolExist       |
 //| (MQL5 reference; confirmation level B, checked on the terminal). |
 //+------------------------------------------------------------------+
 #property script_show_inputs
-#property version "1.01"
+#property version "1.02"
 
 input string InpFile   = "RL_H0_EURUSD_M1.csv";
-input string InpSymbol = "RL_H0_EURUSD";
+input string InpSymbol = "EURUSD_RLH0";  // v1.02: the first 6 letters set the currencies of a FOREX symbol
 input string InpOrigin = "EURUSD";
 
 void OnStart()

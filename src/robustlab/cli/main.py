@@ -1210,7 +1210,7 @@ def null_fidelity_export(days: int = typer.Option(260, "--days"),
 
 @null_app.command("fidelity-compare")
 def null_fidelity_compare(run_id: str | None = typer.Argument(None, help="Default: the latest successful run on "
-                                                                         "RL_H0_EURUSD in the workspace"),
+                                                                         "EURUSD_RLH0 in the workspace"),
                           days: int = typer.Option(260, "--days"),
                           fast: int = typer.Option(12, "--fast"), slow: int = typer.Option(48, "--slow"),
                           config: Path = typer.Option(Path("configs/null_archetypes.yaml"), "--config"),

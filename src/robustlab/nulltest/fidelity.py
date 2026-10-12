@@ -24,7 +24,7 @@ FIDELITY_SEED = 20261014
 START = dt.datetime(2012, 1, 2)  # a Monday: the test period starts here
 PRE_DAYS = 30  # weekdays of history before START: the tester needs about 100 bars before the test start
 #                (found on the terminal 2026-10-12: without them it moved the start to 2012-01-25)
-SYMBOL = "RL_H0_EURUSD"
+SYMBOL = "EURUSD_RLH0"  # first 6 letters = EURUSD: a FOREX custom symbol takes its currencies from its name
 SPREAD_POINTS = 10
 POINT = 0.00001
 

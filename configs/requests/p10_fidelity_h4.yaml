@@ -1,9 +1,11 @@
-# P10 fidelity check (P10_PLAN §4, Q3 = A): RL_SmokeTest on the synthetic custom symbol RL_H0_EURUSD built by
+# P10 fidelity check (P10_PLAN §4, Q3 = A): RL_SmokeTest on the synthetic custom symbol EURUSD_RLH0 built by
 # mql5/Scripts/RobustLab/RL_ImportH0.mq5 from `rlab null fidelity-export` (seed 20261014, 260 weekdays from
 # 2012-01-02). Synthetic prices: far from the holdout; compare with `rlab null fidelity-compare <run_id>`.
+# (Renamed from RL_H0_EURUSD on 2026-10-12: a FOREX custom symbol takes its base / profit currency from the first
+# 6 letters of its name; RL_H0_ gave every deal a profit of 0.)
 # Run it in a separate workspace (workspace_p10fid) so the research database stays clean.
 strategy_file: ../strategies/rl_smoketest.yaml
-symbol: RL_H0_EURUSD
+symbol: EURUSD_RLH0
 timeframe: H4
 from_date: 2012-01-02
 to_date: 2012-12-29

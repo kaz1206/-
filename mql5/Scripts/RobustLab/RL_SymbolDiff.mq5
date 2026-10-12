@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| RL_SymbolDiff.mq5                                                |
 //| P10 fidelity check, diagnosis only: prints the profit-related    |
-//| properties of EURUSD and RL_H0_EURUSD side by side (Experts log).|
+//| properties of EURUSD and EURUSD_RLH0 side by side (Experts log). |
 //| Changes nothing.                                                 |
 //+------------------------------------------------------------------+
 #property script_show_inputs
 #property version "1.00"
 
 input string InpA = "EURUSD";
-input string InpB = "RL_H0_EURUSD";
+input string InpB = "EURUSD_RLH0";
 
 void PD(string name, ENUM_SYMBOL_INFO_DOUBLE p)
   {
