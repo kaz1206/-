@@ -144,3 +144,94 @@ $sl
 ### 6. 送ってほしいもの
 
 1〜5 の表示をすべてそのまま貼ってください。**P8a（検証期間の実行）はまだ行わないでください。** P7 の結果を見て、事前登録のルールどおりに次の手順をお渡しします。
+
+---
+
+# v2（Discovery 6 年）の実機手順
+
+条件: `docs/research/trend_v2/PREREGISTRATION.md`。変わったのは Discovery 期間（2008〜2013 年）だけです。
+P1 → P7 を 1 回で続けて実行します。**同じ PowerShell の窓で、上から順に**実行してください。
+
+### 0. 準備
+
+```powershell
+cd C:\work\repo\rlab
+```
+```powershell
+git pull
+```
+```powershell
+Get-Process terminal64 -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "C:\MT5_verify\terminal64.exe" }
+```
+何も表示されなければ次へ。EA はコンパイルし直さないでください。
+
+### 1. P1 単一テスト（2008〜2013 年の履歴の確認も兼ねる）
+
+```powershell
+.\.venv\Scripts\rlab.exe backtest run configs\requests\trend_ma_h4_v2_single.yaml
+```
+- 期待: `status: SUCCEEDED`、`warnings:` が空。初回は 6 年分の 1 分足をダウンロードするので時間がかかります。
+- **`DATA_COVERAGE`、`QUARANTINED`、`FAILED`、または warnings に何か出たら、ここで止めて表示を送ってください。**
+続けて、同じ単一テストの ID を変数に入れます（実行済みなので MT5 は起動せず、何も増えません）。
+```powershell
+$rn = (.\.venv\Scripts\rlab.exe backtest run configs\requests\trend_ma_h4_v2_single.yaml --json | ConvertFrom-Json).run_id
+```
+```powershell
+.\.venv\Scripts\rlab.exe metrics show $rn
+```
+
+### 2. P3 最適化（25 パス）
+
+```powershell
+.\.venv\Scripts\rlab.exe optimize run configs\studies\trend_ma_h4_v2.yaml
+```
+```powershell
+$or = (.\.venv\Scripts\rlab.exe optimize run configs\studies\trend_ma_h4_v2.yaml --json | ConvertFrom-Json).round_id
+```
+```powershell
+.\.venv\Scripts\rlab.exe optimize show $or
+```
+- 期待: `passes_stored=25`、`remote 0`・`cloud 0`、`trials_in_family: 1094`。
+
+### 3. P4 足切り
+
+```powershell
+.\.venv\Scripts\rlab.exe filter run $or --profile swing_trend
+```
+```powershell
+$fl = (.\.venv\Scripts\rlab.exe filter run $or --profile swing_trend --json | ConvertFrom-Json).filter_id
+```
+
+### 4. P5 ロバストネス
+
+```powershell
+.\.venv\Scripts\rlab.exe robust run $or --filter $fl
+```
+```powershell
+$rb = (.\.venv\Scripts\rlab.exe robust run $or --filter $fl --json | ConvertFrom-Json).robust_id
+```
+```powershell
+.\.venv\Scripts\rlab.exe robust map $rb --metric score
+```
+```powershell
+.\.venv\Scripts\rlab.exe robust map $rb --metric robust
+```
+
+### 5. P6 統計評価（シード 20261016）
+
+```powershell
+.\.venv\Scripts\rlab.exe stats run $or --filter $fl --seed 20261016
+```
+```powershell
+$st = (.\.venv\Scripts\rlab.exe stats run $or --filter $fl --seed 20261016 --json | ConvertFrom-Json).stat_id
+```
+
+### 6. P7 選抜
+
+```powershell
+.\.venv\Scripts\rlab.exe select run $or --filter $fl --robust $rb --stats $st
+```
+
+### 7. 送ってほしいもの
+
+1〜6 の表示をすべて貼ってください。**P8a はまだ行わないでください。**

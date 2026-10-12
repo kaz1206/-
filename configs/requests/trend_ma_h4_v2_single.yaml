@@ -1,0 +1,9 @@
+# P1 single test for trend study v2 (docs/research/trend_v2/PREREGISTRATION.md): the grid centre, inside the v2 Discovery period only.
+strategy_file: ../strategies/rl_smoketest.yaml
+symbol: EURUSD
+timeframe: H4
+from_date: 2008-01-02
+to_date: 2014-01-01
+params: {InpFastPeriod: 15, InpSlowPeriod: 80, InpLots: 0.10}
+tester: {model: OHLC_M1, execution_delay_ms: 0, deposit: 10000, currency: USD, leverage: 100}
+coverage_tolerance_days: 7
