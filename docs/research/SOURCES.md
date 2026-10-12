@@ -87,6 +87,8 @@
 | S-BGK | Broadie, M., Glasserman, P., & Kou, S. (1997). A continuity correction for discrete barrier options. *Mathematical Finance*, 7(4), 325–349. | 日次（離散）監視の到達確率を連続のブラウン運動の閉形式と比べるとき、障壁を 0.5826σ√Δt ずらす補正。P9 事前シミュレーション R1b/R1c の基準値に使用（記憶による。式は R1c で数値的に整合を確認） | B |
 | S-CP | Clopper, C. J., & Pearson, E. S. (1934). The use of confidence or fiducial limits illustrated in the case of the binomial. *Biometrika*, 26(4), 404–413. | 二項比率の正確な信頼限界（ベータ分布の分位点）。P9 で破産・DD 超過の割合をモンテカルロ誤差込みで安全側に判定する（`scipy.stats.beta.ppf`） | B |
 | S-LW | Ledoit, O., & Wolf, M. (2004). A well-conditioned estimator for large-dimensional covariance matrices. *JMVA*, 88(2). | 共分散の縮小推定（将来） | 古典（今回の調査では未読） |
+| S-MOP2012 | Moskowitz, T. J., Ooi, Y. H., & Pedersen, L. H. (2012). Time series momentum. *Journal of Financial Economics*, 104(2), 228–250. doi:10.1016/j.jfineco.2011.11.003（SSRN 2089463、AQR の論文ページとデータページ） | 58 の先物・フォワード（株価指数・通貨・商品・債券）で、過去 12 か月の超過リターンが将来のリターンを予測する。持続は 1〜12 か月で、それより長いと一部反転する。AQR の公開データは「振り返り 12 か月・保有 1 か月」。分散したポートフォリオの成績が主張の中心。**1 銘柄ごとの Sharpe の値は本文で確認していない** | B（要旨・AQR のページで確認。本文は未読） |
+| S-HOP2017 | Hurst, B., Ooi, Y. H., & Pedersen, L. H. (2017). A Century of Evidence on Trend-Following Investing. *Journal of Portfolio Management*, 44(1)（2012 年版は 1903 年から） | 振り返り 1・3・12 か月の 3 つの時系列モメンタムを組み合わせ、67 市場で検証。年率 Sharpe 約 0.4（手数料控除後）などの数字は二次資料による | C（二次資料。本文の数値は未確認） |
 
 ## 3. 補助資料（コミュニティ等）
 
