@@ -1,0 +1,9 @@
+# trend: channel breakout (Donchian / Turtle style). docs/research/classics/PREREGISTRATION.md
+strategy_name: RL_Donchian
+expert: RobustLab\RL_Donchian          # under MQL5\Experts, without .ex5
+mq5_path: ../../mql5/Experts/RobustLab/RL_Donchian.mq5
+telemetry_version: "3"
+inputs:
+  - {name: InpEntryPeriod, type: int}
+  - {name: InpExitPeriod, type: int}
+  - {name: InpLots, type: double}

@@ -1,0 +1,17 @@
+# Classic strategies v1 — trend: channel breakout (Donchian / Turtle style).
+# docs/research/classics/PREREGISTRATION.md (recorded 2026-10-12 before any run). Same frame as trend v2:
+# EURUSD H4, 6-year Discovery 2008-2013, 5 x 5 grid, lot 0.10, OHLC_M1. New strategy family (its own trial count).
+study_id: classic_donchian_h4_v1
+strategy_file: ../strategies/rl_donchian.yaml
+symbol: EURUSD
+timeframe: H4
+from_date: 2008-01-02          # [from_date, to_date) in server time
+to_date: 2014-01-01
+param_space:
+  InpEntryPeriod: {start: 30, step: 30, stop: 150}
+  InpExitPeriod: {start: 10, step: 10, stop: 50}
+fixed:
+  InpLots: 0.10
+tester: {model: OHLC_M1, execution_delay_ms: 0, deposit: 10000, currency: USD, leverage: 100}
+max_passes_per_job: 2000
+coverage_tolerance_days: 7

@@ -1,0 +1,6 @@
+# P8a plan for classic_tsmom_h4_v1 (docs/research/classics/PREREGISTRATION.md). Locked only if P7 selects candidates.
+label: classic_tsmom_h4_v1
+strategy_file: ../strategies/rl_tsmom.yaml
+periods:
+  - {name: V0, from: 2016-01-11, to: 2017-12-22}
+  - {name: V1, from: 2019-07-08, to: 2019-12-20}

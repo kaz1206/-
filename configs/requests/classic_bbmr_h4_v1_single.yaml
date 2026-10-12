@@ -1,0 +1,9 @@
+# P1 single test for classic_bbmr_h4_v1 (grid centre, Discovery period only). docs/research/classics/PREREGISTRATION.md
+strategy_file: ../strategies/rl_bollingermr.yaml
+symbol: EURUSD
+timeframe: H4
+from_date: 2008-01-02
+to_date: 2014-01-01
+params: {InpPeriod: 30, InpDeviation: 2.5, InpLots: 0.10}
+tester: {model: OHLC_M1, execution_delay_ms: 0, deposit: 10000, currency: USD, leverage: 100}
+coverage_tolerance_days: 7

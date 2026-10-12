@@ -1,0 +1,6 @@
+# scripts/run_pipeline.py input for the already-run trend v2 (kept as a record; running it again only shows ALREADY_DONE)
+name: trend_ma_h4_v2
+request: configs/requests/trend_ma_h4_v2_single.yaml
+study: configs/studies/trend_ma_h4_v2.yaml
+profile: swing_trend
+seed: 20261016

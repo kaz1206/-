@@ -1,0 +1,9 @@
+# momentum: time-series momentum (sign of the past return, rebalanced every N bars). docs/research/classics/PREREGISTRATION.md
+strategy_name: RL_TSMom
+expert: RobustLab\RL_TSMom          # under MQL5\Experts, without .ex5
+mq5_path: ../../mql5/Experts/RobustLab/RL_TSMom.mq5
+telemetry_version: "3"
+inputs:
+  - {name: InpLookback, type: int}
+  - {name: InpHoldBars, type: int}
+  - {name: InpLots, type: double}

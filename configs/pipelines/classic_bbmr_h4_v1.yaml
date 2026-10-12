@@ -1,0 +1,6 @@
+# scripts/run_pipeline.py input (P1 -> P7). docs/research/classics/PREREGISTRATION.md
+name: classic_bbmr_h4_v1
+request: configs/requests/classic_bbmr_h4_v1_single.yaml
+study: configs/studies/classic_bbmr_h4_v1.yaml
+profile: mean_reversion
+seed: 20261019

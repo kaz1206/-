@@ -1,0 +1,9 @@
+# mean reversion: Bollinger bands, exit at the middle line, no stop loss. docs/research/classics/PREREGISTRATION.md
+strategy_name: RL_BollingerMR
+expert: RobustLab\RL_BollingerMR          # under MQL5\Experts, without .ex5
+mq5_path: ../../mql5/Experts/RobustLab/RL_BollingerMR.mq5
+telemetry_version: "3"
+inputs:
+  - {name: InpPeriod, type: int}
+  - {name: InpDeviation, type: double}
+  - {name: InpLots, type: double}
