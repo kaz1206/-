@@ -5,6 +5,7 @@ P1〜P7 は完了（P7 まで実機・実データで確認合格）。P8a（複
 
 ## 主要ドキュメント
 
+- 使い方（初心者向けマニュアル）: `docs/HOW_TO_USE.md`
 - 設計書: `docs/ARCHITECTURE.md`（`[S-xxx]` = 情報源 ID、`(C#)` = 設計変更番号）
 - 情報源レジストリ: `docs/research/SOURCES.md`
 - 手法評価・MT5 仕様の確認結果・実機確認チェックリスト: `docs/research/FINDINGS.md`
