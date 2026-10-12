@@ -1,0 +1,43 @@
+# Study A (docs/research/study_a/SPEC.md s2, finalized 2026-10-12): the machine's safety (false passes under H0)
+# and detection power (passes under planted edges) for the T1 archetype (= RL_TSMom v1.00).
+# Hashed into every result. The P10 config (configs/null_archetypes.yaml) is NOT used or changed.
+version: studyA-s2
+account: {deposit: 10000.0, leverage: 100.0, contract: 100000.0, spread: 0.0001, stop_out_pct: 50.0,
+          start_price: 1.10, point: 0.00001, tick_size: 0.00001, tick_value: 1.0}
+# H0 base: the P10 price model values, unchanged (SPEC §4.1)
+price: {sigma_bar: 0.0022, garch_alpha: 0.05, garch_beta: 0.93, t_df: 5, bars_per_day: 6, steps_per_bar: 8}
+# Real weekday calendar (SPEC §10 A2); end dates exclusive as everywhere in the platform
+calendar: {warmup_weekdays: 290, discovery: [2001-01-02, 2014-01-01], v0: [2016-01-11, 2017-12-22],
+           v1: [2019-07-08, 2019-12-20]}
+grid:
+  axes: [InpLookback, InpHoldBars]
+  InpLookback: {start: 126, step: 126, stop: 1512}   # 1-12 months of H4 bars
+  InpHoldBars: {start: 6, step: 6, stop: 30}
+lots: 0.10
+profile: swing_trend                    # configs/strategy_profiles.yaml
+selection_profile: default              # configs/selection_profiles.yaml
+dsr_n_trials: 85                        # RL_TSMom family: 25 (classic_tsmom_h4_v1) + 60 (SPEC §5.1)
+bootstrap_reps: 2000                    # P6 and P8a, as in production
+extra_cost_width: 0.00010               # configs/cost_stress.yaml EURUSD
+strategy_version: sv_studya_t1_v1       # synthetic strategy version for candidate ids (SPEC §10 A7)
+edges:
+  E1: {kind: regime, persistence_bars: 756}     # mean regime length 6 months (experimental setting)
+  E2: {kind: ou_drift, half_life_bars: 378}     # drift half-life 3 months (experimental setting)
+reference_cell: {InpLookback: 756, InpHoldBars: 18}
+calibration: {worlds: 10, base_seed: 20261130, seeds: {E1: 20261131, E2: 20261132}, targets: [0.5, 1.0, 1.5],
+              tolerance: 0.02}
+criterion: {max_upper_bound: 0.05, confidence: 0.95, s1_max_se: 3.0}
+measurements:
+  S: {edge: null, rounds: 1000, base_seed: 20261101}
+  P_E1_0.5: {edge: E1, strength: 0.5, rounds: 400, base_seed: 20261101, edge_seed: 20261111}
+  P_E1_1.0: {edge: E1, strength: 1.0, rounds: 400, base_seed: 20261101, edge_seed: 20261112}
+  P_E1_1.5: {edge: E1, strength: 1.5, rounds: 400, base_seed: 20261101, edge_seed: 20261113}
+  P_E2_0.5: {edge: E2, strength: 0.5, rounds: 400, base_seed: 20261101, edge_seed: 20261121}
+  P_E2_1.0: {edge: E2, strength: 1.0, rounds: 400, base_seed: 20261101, edge_seed: 20261122}
+  P_E2_1.5: {edge: E2, strength: 1.5, rounds: 400, base_seed: 20261101, edge_seed: 20261123}
+pilot:
+  null: {edge: null, rounds: 50, base_seed: 20261191}
+  edge: {edge: E1, strength: 1.0, rounds: 50, base_seed: 20261191, edge_seed: 20261192}
+equivalence: {base_seed: 20261181, edge_seed: 20261182}
+fidelity: {seeds: {H0: 20261171, E1: 20261172}, test_weekdays: 520, pre_weekdays: 291,
+           cells: [[126, 6], [126, 30], [756, 6], [756, 30], [1512, 6], [1512, 30]]}

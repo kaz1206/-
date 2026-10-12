@@ -1260,5 +1260,165 @@ def null_fidelity_compare(run_id: str | None = typer.Argument(None, help="Defaul
     raise typer.Exit(0 if v2["match"] else 2)
 
 
+
+studya_app = typer.Typer(no_args_is_help=True, help="Study A: the machine's safety and detection power (T1 = RL_TSMom)")
+app.add_typer(studya_app, name="studya")
+STUDYA_CFG = typer.Option(Path("configs/study_a.yaml"), "--config")
+
+
+def _studya_progress(done: int, total: int) -> None:
+    typer.echo(f"  {done}/{total} rounds", err=True)
+
+
+def _studya_print(s: dict) -> None:
+    typer.echo(f"name: {s['name']}  rounds: {s['rounds']}  detected (P8a PASS) rounds: {s['detected_rounds']}")
+    ci = s["ci"]
+    if s["measurement"].get("edge") is None:
+        typer.echo(f"false-pass rate: {s['rate']:.4f}  one-sided 95% upper: {ci['upper_one_sided']:.4f}  "
+                   f"criterion <= {s['criterion']['max_upper_bound']}  verdict: {s.get('verdict')}")
+        typer.echo(f"S1: gross mean {s['s1']['gross_mean']:.2f}  z {s['s1']['z']}")
+    else:
+        typer.echo(f"detection rate: {s['rate']:.4f}  95% CI {ci['lower']:.4f}-{ci['upper']:.4f}  "
+                   f"(edge {s['measurement']['edge']}, strength {s['measurement']['strength']}, scale {s['edge_scale']:.6g})")
+    typer.echo(f"funnel (mean per round): {s['funnel_mean_per_round']}  rounds with: {s['rounds_with']}")
+    typer.echo(f"timing: {s['timing']}")
+    for n in s["notes"]:
+        typer.echo(f"note: {n}")
+
+
+@studya_app.command("calibrate")
+def studya_calibrate(config: Path = STUDYA_CFG) -> None:
+    """Fix the edge strengths (SPEC §4.3) before any measurement; refuses to overwrite."""
+    from robustlab.studya import run as R
+
+    out, h = R.calibration(config, lambda s: typer.echo(f"  {s}", err=True))
+    typer.echo(f"calibration saved (sha256 {h[:16]})")
+    for name, res in out["edges"].items():
+        for t, v in res.items():
+            typer.echo(f"{name} s={t}: scale {v['scale']:.6g} reference {v['reference_sharpe']:.4f} "
+                       f"best {v['max_cell']} {v['max_sharpe']:.4f}")
+
+
+@studya_app.command("pilot")
+def studya_pilot(config: Path = STUDYA_CFG, workers: int = typer.Option(4, "--workers"),
+                 calibration: Path | None = typer.Option(None, "--calibration")) -> None:
+    """Pilot (SPEC §6.4): separate seeds, not counted. Writes results/pilot_*.json."""
+    from robustlab.studya import evaluate as E
+    from robustlab.studya import run as R
+
+    cfg, _ = E.load_config(config)
+    for key, m in cfg["pilot"].items():
+        s, rounds = R.execute(config, f"pilot_{key}", m, workers=workers, calib_path=calibration,
+                              progress=_studya_progress)
+        R.save(s, rounds, R.RESULTS, f"pilot_{key}", refuse_existing=False)
+        _studya_print(s)
+
+
+@studya_app.command("measure")
+def studya_measure(name: str = typer.Argument(..., help="S, P_E1_0.5, ... or ALL"), config: Path = STUDYA_CFG,
+                   workers: int = typer.Option(4, "--workers")) -> None:
+    """Main measurement (SPEC §6): each measurement ONCE; a second run is refused."""
+    from robustlab.studya import evaluate as E
+    from robustlab.studya import run as R
+
+    cfg, _ = E.load_config(config)
+    names = list(cfg["measurements"]) if name == "ALL" else [name]
+    for n in names:
+        if n not in cfg["measurements"]:
+            typer.echo(f"unknown measurement {n}", err=True)
+            raise typer.Exit(1)
+        if R.already(n):
+            typer.echo(f"{n}: ALREADY_MEASURED (each measurement runs once)", err=True)
+            continue
+        s, rounds = R.execute(config, n, cfg["measurements"][n], workers=workers, progress=_studya_progress)
+        R.save(s, rounds, R.RESULTS, n)
+        _studya_print(s)
+
+
+@studya_app.command("show")
+def studya_show(name: str) -> None:
+    from robustlab.studya import run as R
+
+    p = R.RESULTS / f"{name}.json"
+    if not p.exists():
+        typer.echo(f"no result {p}", err=True)
+        raise typer.Exit(1)
+    _studya_print(json.loads(p.read_text(encoding="utf-8")))
+
+
+@studya_app.command("fidelity-export")
+def studya_fidelity_export(config: Path = STUDYA_CFG,
+                           terminal: Path = typer.Option(Path("configs/terminal.yaml"), "--terminal"),
+                           out_dir: Path | None = typer.Option(None, "--out-dir", help="Default: Common\\Files")) -> None:
+    """Write the two synthetic M1-bar files for RL_ImportT1 (SPEC §3)."""
+    from robustlab.config.loader import load_terminal_config
+    from robustlab.studya import evaluate as E
+    from robustlab.studya import fidelity as fd
+
+    st = E.setup(config)
+    if out_dir is None:
+        out_dir = load_terminal_config(terminal).common_files_dir
+    meta = fd.export(st, out_dir)
+    for k in ("H0", "E1"):
+        typer.echo(f"{k}: {meta[k]['symbol']} {meta[k]['rows']} M1 bars -> {meta[k]['file']} "
+                   f"(price {meta[k]['price_min']:.5f}-{meta[k]['price_max']:.5f})")
+    typer.echo(f"data from {meta['data_from']}, test from {meta['test_from']} to {meta['test_to_exclusive']} (exclusive)")
+    typer.echo("next: run the script RL_ImportT1 in MT5 (it prints 'RL_ImportT1: done (... OK ... OK)')")
+
+
+@studya_app.command("fidelity-run")
+def studya_fidelity_run(config: Path = STUDYA_CFG,
+                        terminal: Path = typer.Option(Path("configs/terminal.yaml"), "--terminal"),
+                        partition: Path = typer.Option(Path("configs/data_partition.yaml"), "--partition"),
+                        workspace: Path = typer.Option(Path("workspace_studya_fid"), "--workspace")) -> None:
+    """Run the 12 single tests of the fidelity check and compare them with the T1 model (definition t1)."""
+    from robustlab.mt5 import telemetry_reader as tr
+    from robustlab.single_backtest import run_backtest
+    from robustlab.storage.artifacts import ArtifactStore
+    from robustlab.studya import evaluate as E
+    from robustlab.studya import fidelity as fd
+    from robustlab.studya import run as R
+
+    st = E.setup(config)
+    report = {"definition": fd.DEFINITION, "config_hash": st.cfg_hash, "tests": []}
+    for kind, L, H, req in fd.requests(st, workspace.resolve() / "studya_requests"):
+        out = run_backtest(req, terminal, partition, workspace)
+        item = {"kind": kind, "symbol": fd.SYMBOLS[kind], "InpLookback": L, "InpHoldBars": H, "status": out.status,
+                "run_id": out.run_id}
+        if out.status not in ("SUCCEEDED", "ALREADY_SUCCEEDED"):
+            item["message"] = out.message
+            item["match"] = False
+            report["tests"].append(item)
+            typer.echo(f"{kind} L={L} H={H}: {out.status} {out.message}")
+            continue
+        db = _open(workspace)
+        try:
+            job = db.one("SELECT job_id FROM job WHERE run_id = ? AND status = 'SUCCEEDED' ORDER BY job_id DESC LIMIT 1",
+                         (out.run_id,))
+            store = ArtifactStore(workspace.resolve() / "artifacts", db)
+
+            def art(role: str) -> str:
+                row = db.one("SELECT sha256 FROM job_artifact WHERE job_id = ? AND role = ?", (job["job_id"], role))
+                return store.read(row["sha256"]).decode("utf-8-sig")
+
+            deals = tr.parse_csv_text(art("telemetry_deals"), tr.DEALS_COLUMNS, "deals")
+            env = json.loads(art("telemetry_env"))
+            stats = json.loads(art("telemetry_stats")).get("values", {})
+        finally:
+            db.close()
+        cmp = fd.compare(st, kind, fd.model(st, kind, L, H), deals, env, stats.get("profit"))
+        item.update(cmp)
+        report["tests"].append(item)
+        typer.echo(f"{kind} L={L} H={H}: deals model {cmp['deals_model']} tester {cmp['deals_tester']}  "
+                   f"first {cmp['first_deal']}  match: {cmp['match']}")
+        for i in cmp["issues"][:5]:
+            typer.echo(f"    {i}")
+    report["match"] = all(t.get("match") for t in report["tests"]) and len(report["tests"]) == 12
+    fd.save(report, R.RESULTS / "fidelity_t1.json")
+    typer.echo(f"=== fidelity t1: {'MATCH (all 12 tests)' if report['match'] else 'NOT MATCHED'} ===")
+    typer.echo(f"saved: {R.RESULTS / 'fidelity_t1.json'}")
+    raise typer.Exit(0 if report["match"] else 2)
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()

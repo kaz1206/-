@@ -20,6 +20,9 @@ the full grid of the ||Y inputs, frames written by the "frame-mode instance" (ou
 tester log lines, an optimization XML (rows sorted by Result) and a cache file. FAKE_OPT_MODE:
   ok, missing_pass, cache_hit, cloud, xml_mismatch, xml_bad_header, no_frames, bad_daily,
   mixed (fast >= slow trades nothing; the lowest fast with the highest slow goes bankrupt)
+FAKE_SERIES_FILE (study A equivalence check, SPEC §3.5): a JSON file with, per grid cell and test start date, the
+TesterStatistics, tracking values, daily rows and deals of that test; optimizations and single tests return exactly
+those (as the EA's telemetry would), so the production pipeline reads the same series as the in-memory one.
 """
 
 from __future__ import annotations
@@ -253,6 +256,102 @@ def synth_single(data_dir: Path, common: Path, kv: dict[str, str], params: dict[
     return 0
 
 
+def _series() -> dict:
+    return json.loads(Path(os.environ["FAKE_SERIES_FILE"]).read_text(encoding="utf-8"))
+
+
+def _cell_key(values: dict[str, str], axes: list[str]) -> str:
+    return "_".join(str(int(float(values[a].split("|")[0]))) for a in axes)
+
+
+def _ticks(daily: list[dict]) -> tuple[str, str]:
+    return f"{daily[0]['date']} 00:00:30", f"{daily[-1]['date']} 23:30:30"
+
+
+def optimize_series(data_dir: Path, common: Path, kv: dict[str, str], params: dict[str, str], job_id: str,
+                    build: int) -> int:
+    doc = _series()
+    axes = doc["axes"]
+    names, values = _grid(params)
+    combos = [tuple(reversed(c)) for c in itertools.product(*reversed(values))]
+    start = dt.datetime.strptime(kv["FromDate"], "%Y.%m.%d").date().isoformat()
+    lots = params["InpLots"].split("|")[0]
+    n = len(combos)
+    tester_log(data_dir, "Local network farm switched off")
+    tester_log(data_dir, "Cloud servers switched off")
+    tester_log(data_dir, "complete optimization started")
+    tester_log(data_dir, f"optimization finished, total passes {n}")
+    tester_log(data_dir, f"local {n} tasks (100%), remote 0 tasks (0%), cloud 0 tasks (0%)", "Statistics")
+    prefix = f"RL_{job_id}_"
+    (common / f"{prefix}fm_init.json").write_text(json.dumps(
+        {"job_id": job_id, "telemetry_version": "3", "terminal_build": build, "mql_frame_mode": True}))
+    lines, daily = [], ["pass,date,balance_close,equity_close,equity_min,equity_max,positions_max,ticks"]
+    results = {}
+    for pass_no, combo in reversed(list(enumerate(combos))):
+        vals = dict(zip(names, combo, strict=True))
+        t = doc["cells"][_cell_key(vals, axes)][start]
+        results[pass_no] = (t["stats"]["profit"], int(t["stats"]["trades"]))
+        first, last = _ticks(t["daily"])
+        lines.append(json.dumps({
+            "pass": pass_no, "format": 3, "inputs": [f"{a}={v}" for a, v in zip(names, combo, strict=True)]
+            + [f"InpLots={lots}"], "stats": t["stats"], "tracking": t["tracking"], "ticks": 1000 * len(t["daily"]),
+            "first_tick": first, "last_tick": last, "bars": 6 * len(t["daily"]), "days": len(t["daily"])}))
+        for r in t["daily"]:
+            daily.append(f"{pass_no},{r['date']},{r['balance_close']},{r['equity_close']},{r['equity_min']},"
+                         f"{r['equity_max']},{r['positions_max']},{r['ticks']}")
+    (common / f"{prefix}passes.jsonl").write_text("".join(ln + "\n" for ln in lines))
+    (common / f"{prefix}pdaily.csv").write_text("\n".join(daily) + "\n")
+    (common / f"{prefix}fm_done.json").write_text(json.dumps(
+        {"job_id": job_id, "telemetry_version": "3", "mql_frame_mode": True, "frames_received": len(lines),
+         "frames_on_rescan": len(lines), "pass_events": len(lines), "duplicate_passes": 0, "bad_frames": 0,
+         "write_failures": 0}))
+    deposit = float(kv["Deposit"])
+    header = ["Pass", "Result", "Profit", "Expected Payoff", "Profit Factor", "Recovery Factor", "Sharpe Ratio",
+              "Custom", "Equity DD %", "Trades", *names]
+    rows = [[str(k), f"{deposit + results[k][0]:.2f}", f"{results[k][0]:.2f}", "0", "0", "0", "0", "0", "0",
+             str(results[k][1]), *combo] for k, combo in enumerate(combos)]
+    rows.sort(key=lambda r: -float(r[1]))
+
+    def xml_row(cells):
+        return "<Row>" + "".join(f'<Cell><Data ss:Type="String">{c}</Data></Cell>' for c in cells) + "</Row>\n"
+
+    xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+           '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" '
+           'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n'
+           '<Worksheet ss:Name="Tester Optimizator Results"><Table>\n'
+           + xml_row(header) + "".join(xml_row(r) for r in rows) + "</Table></Worksheet></Workbook>\n")
+    (data_dir / f"{kv['Report']}.xml").write_bytes(xml.encode("utf-8"))
+    log(data_dir, "optimization frame expert loaded successfully", "Experts")
+    return 0
+
+
+def single_series(data_dir: Path, common: Path, kv: dict[str, str], params: dict[str, str], job_id: str,
+                  build: int) -> int:
+    doc = _series()
+    if "symbols" in doc:  # study A fidelity: one series set per custom symbol
+        doc = doc["symbols"][kv["Symbol"]]
+    start = dt.datetime.strptime(kv["FromDate"], "%Y.%m.%d").date().isoformat()
+    t = doc["cells"][_cell_key(params, doc["axes"])][start]
+    cols = ["ticket", "time", "time_msc", "type", "entry", "volume", "price", "profit", "commission", "swap", "fee",
+            "symbol", "magic", "position_id", "reason", "comment"]
+    deals = [",".join(cols)] + [",".join(f'"{d[c]}"' if c == "comment" else d[c] for c in cols) for d in t["deals"]]
+    daily = ["date,balance_close,equity_close,equity_min,equity_max,positions_max,ticks"] + [
+        ",".join(r[c] for c in ("date", "balance_close", "equity_close", "equity_min", "equity_max", "positions_max",
+                                "ticks")) for r in t["daily"]]
+    first, last = _ticks(t["daily"])
+    env = env_doc(job_id, terminal_build=build, telemetry_version="3", tracking=t["tracking"], period=16388,
+                  period_name="PERIOD_H4", first_tick=first, last_tick=last, bars=6 * len(t["daily"]),
+                  ticks=1000 * len(t["daily"]))
+    if "env_symbol" in doc:
+        env["symbol"] = env["symbol"] | doc["env_symbol"]
+        env["observed"] = {"spread": doc["env_symbol"].get("observed_spread", 12)}
+    write_telemetry(common, job_id, deals_text="\n".join(deals) + "\n", stats=t["stats"], version="3", env=env,
+                    daily_text="\n".join(daily) + "\n")
+    (data_dir / f"{kv['Report']}.htm").write_bytes(codecs.BOM_UTF16_LE + "<html>report</html>".encode("utf-16-le"))
+    log(data_dir, 'last test passed with result "successfully finished" in 0:00:00.216')
+    return 0
+
+
 def main() -> int:
     mode = os.environ.get("FAKE_MODE", "ok")
     data_dir = Path(sys.argv[0]).absolute().parent  # do not follow the test symlink
@@ -285,6 +384,10 @@ def main() -> int:
         time.sleep(3600)
         return 0
     log(data_dir, "automatic testing started")
+    if os.environ.get("FAKE_SERIES_FILE") and mode == "ok":
+        if kv.get("Optimization") == "1":
+            return optimize_series(data_dir, common, kv, params, job_id, build)
+        return single_series(data_dir, common, kv, params, job_id, build)
     if kv.get("Optimization") == "1" and mode == "ok":
         return optimize(data_dir, common, kv, params, job_id, build)
     if os.environ.get("FAKE_SINGLE_SYNTH") and mode == "ok":
