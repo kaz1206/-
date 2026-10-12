@@ -1,0 +1,7 @@
+# P8a validation plan for trend study v1 (PREREGISTRATION.md §5). Written before any run; locked with
+# `rlab validate lock` only if P7 selects candidates. Never edited after that (a new plan is a revision).
+label: trend_ma_h4_v1
+strategy_file: ../strategies/rl_smoketest.yaml
+periods:
+  - {name: V0, from: 2016-01-11, to: 2017-12-22}   # about 2 years (A1: V0 = 520 weekdays), 10 days after Discovery
+  - {name: V1, from: 2019-07-08, to: 2019-12-20}   # about 5.5 months (A1: V1 = 130 weekdays), after the rehearsal holdout + embargo

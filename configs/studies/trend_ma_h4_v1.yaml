@@ -1,0 +1,18 @@
+# Trend-following study v1 (docs/research/trend_v1/PREREGISTRATION.md, recorded 2026-10-12 before any run).
+# Same structure as the P10 archetype A1 (MA cross, H4, 5 x 5 grid, lot 0.10, swing_trend) so that the measured
+# chance pass rate of A1 applies to this pipeline configuration. Periods avoid every period this EA has already
+# been shown (2018-01-02 .. 2024-06-20) and the holdout + embargo.
+study_id: trend_ma_h4_v1
+strategy_file: ../strategies/rl_smoketest.yaml   # strategy_family defaults to RL_SmokeTest (earlier trials are counted)
+symbol: EURUSD
+timeframe: H4
+from_date: 2014-01-02          # [from_date, to_date) in server time, about 2 years (A1: D = 520 weekdays)
+to_date: 2016-01-01
+param_space:
+  InpFastPeriod: {start: 5, step: 5, stop: 25}      # A1: 5, 10, 15, 20, 25
+  InpSlowPeriod: {start: 40, step: 20, stop: 120}   # A1: 40, 60, 80, 100, 120
+fixed:
+  InpLots: 0.10                                    # A1: lot 0.10
+tester: {model: OHLC_M1, execution_delay_ms: 0, deposit: 10000, currency: USD, leverage: 100}
+max_passes_per_job: 2000
+coverage_tolerance_days: 7
