@@ -179,3 +179,23 @@ def test_snapshot_keeps_only_allowed_fields(tmp_path):
     snap["account"]["login"] = 1
     with pytest.raises(snp.SnapshotError):
         snp.validate(snap)
+
+
+def test_snapshot_waits_for_the_first_price(monkeypatch):
+    class Late(FakeMT5):
+        calls = 0
+
+        def symbol_info_tick(self, s):
+            Late.calls += 1
+            return None if Late.calls < 3 else SimpleNamespace(bid=1.1, ask=1.1001)
+
+    monkeypatch.setattr(snp, "TICK_POLL_SEC", 0.0)
+    assert snp.take(Late(), "EURUSD", 0.0001)["price"]["ask"] == 1.1001
+
+    class Never(FakeMT5):
+        def symbol_info_tick(self, s):
+            return SimpleNamespace(bid=0.0, ask=0.0)
+
+    monkeypatch.setattr(snp, "TICK_WAIT_SEC", 0.0)
+    with pytest.raises(snp.SnapshotError, match="Market Watch"):
+        snp.take(Never(), "EURUSD", 0.0001)

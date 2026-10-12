@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +23,26 @@ SYMBOL_FIELDS = ("volume_min", "volume_step", "volume_max", "trade_contract_size
 STOPOUT_MODE_PERCENT, STOPOUT_MODE_MONEY = 0, 1  # ACCOUNT_STOPOUT_MODE_PERCENT / _MONEY
 
 
+TICK_WAIT_SEC, TICK_POLL_SEC = 10.0, 0.5  # a symbol just added to Market Watch gets its first price after a moment
+
+
 class SnapshotError(RuntimeError):
     pass
+
+
+def _price(mt5: Any, symbol: str, wait: float = TICK_WAIT_SEC, poll: float = TICK_POLL_SEC) -> Any:
+    """The current bid/ask, waiting up to `wait` seconds for the first tick of a freshly selected symbol."""
+    deadline = time.monotonic() + wait
+    while True:
+        tick = mt5.symbol_info_tick(symbol)
+        if tick is not None and tick.ask and tick.bid:
+            return tick
+        if time.monotonic() >= deadline:
+            got = "nothing" if tick is None else f"bid={tick.bid} ask={tick.ask}"
+            raise SnapshotError(f"no price for {symbol} after {wait:.0f} s (symbol_info_tick returned {got}; "
+                                f"last_error {mt5.last_error()}). Check that the terminal is connected to the demo "
+                                f"account and that {symbol} shows prices in Market Watch, then run again.")
+        time.sleep(poll)
 
 
 def take(mt5: Any, symbol: str, width: float) -> dict[str, Any]:
@@ -36,10 +55,8 @@ def take(mt5: Any, symbol: str, width: float) -> dict[str, Any]:
         if acc is None or info is None:
             raise SnapshotError(f"account_info / symbol_info returned nothing for {symbol}: {mt5.last_error()}")
         if not info.visible and not mt5.symbol_select(symbol, True):
-            raise SnapshotError(f"cannot select {symbol}")
-        tick = mt5.symbol_info_tick(symbol)
-        if tick is None or not tick.ask or not tick.bid:
-            raise SnapshotError(f"no price for {symbol}")
+            raise SnapshotError(f"cannot add {symbol} to Market Watch: {mt5.last_error()}")
+        tick = _price(mt5, symbol)
         m_buy = mt5.order_calc_margin(mt5.ORDER_TYPE_BUY, symbol, 1.0, tick.ask)
         m_sell = mt5.order_calc_margin(mt5.ORDER_TYPE_SELL, symbol, 1.0, tick.bid)
         cost = mt5.order_calc_profit(mt5.ORDER_TYPE_BUY, symbol, 1.0, tick.ask, tick.ask + width)
