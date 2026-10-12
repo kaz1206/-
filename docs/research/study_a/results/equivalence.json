@@ -1,0 +1,66 @@
+{
+ "stat_seed": 20261183,
+ "e1_scale": 0.00025,
+ "rounds": [
+  {
+   "kind": "H0",
+   "round": 0,
+   "p4_pass": 28,
+   "selected": 1,
+   "p8a_pass": 0,
+   "n_trials": 60,
+   "candidates_compared": 60,
+   "differences": []
+  },
+  {
+   "kind": "H0",
+   "round": 1,
+   "p4_pass": 4,
+   "selected": 0,
+   "p8a_pass": 0,
+   "n_trials": 60,
+   "candidates_compared": 60,
+   "differences": []
+  },
+  {
+   "kind": "H0",
+   "round": 3,
+   "p4_pass": 40,
+   "selected": 1,
+   "p8a_pass": 0,
+   "n_trials": 60,
+   "candidates_compared": 60,
+   "differences": []
+  },
+  {
+   "kind": "E1",
+   "round": 0,
+   "p4_pass": 36,
+   "selected": 2,
+   "p8a_pass": 1,
+   "n_trials": 60,
+   "candidates_compared": 60,
+   "differences": []
+  },
+  {
+   "kind": "E1",
+   "round": 1,
+   "p4_pass": 18,
+   "selected": 1,
+   "p8a_pass": 1,
+   "n_trials": 60,
+   "candidates_compared": 60,
+   "differences": []
+  },
+  {
+   "kind": "E1",
+   "round": 2,
+   "p4_pass": 38,
+   "selected": 1,
+   "p8a_pass": 1,
+   "n_trials": 60,
+   "candidates_compared": 60,
+   "differences": []
+  }
+ ]
+}
