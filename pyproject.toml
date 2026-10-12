@@ -13,6 +13,8 @@ dependencies = [
     "numpy>=2.3",
     "scipy>=1.16",
     "arch==8.0.0",
+    # P9 broker snapshot (rlab risk snapshot). Windows-only wheels; pinned to the version checked in [S-MT5PY]
+    "MetaTrader5==5.0.6231; sys_platform == 'win32'",
 ]
 
 [project.scripts]

@@ -349,6 +349,8 @@ B の場合の D5 の扱い: S63 の副次的な効果で、D5（1.5 倍）も�
 - テスト: 単体 `tests/unit/test_risk.py`（限界ロットと総当たりの一致、Clopper-Pearson の境界、シナリオの再現性と期間の境目、切り捨て、最小ロット未満で切り上がらないこと 2,000 通り、制約の効き方、プロファイルで緩められないこと、スナップショットに口座番号・名義・サーバー名が入らないこと）、結合 `tests/integration/test_risk_run.py`（ALLOCATED と最終ロットでの再計算、同じ入力で同じ結果、小さい口座で INFEASIBLE_MIN_LOT、証拠金予算、P8a 不合格は DIAGNOSTIC で判定なし、OOS FAIL で配分なし、入力の検査）。
 - 練習用ワークスペースの OOS: FAIL は配分を止め、PASS は「未実施」と同じ扱い（信頼度を上げない）。
 
+- 修正（2026-10-12、実機確認で判明）: `MetaTrader5` パッケージを依存関係に入れ忘れていたため、Windows で `rlab risk snapshot` が「the MetaTrader5 package is not available」で止まった。`pyproject.toml` に `MetaTrader5==5.0.6231; sys_platform == 'win32'`（[S-MT5PY] で確認した版に固定、Windows のみ）を追加し `uv.lock` を更新。Linux では入らないので、テストと計算には影響しない。
+
 ### 9.1 実装後の再検証（§7.1、同じ条件・同じシード。`docs/research/p9_validation/run_checks.py`、出力 `run_checks_output_2026-10-11.txt`）
 
 **未達はなし。合格基準は変えていない。**
