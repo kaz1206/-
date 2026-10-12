@@ -1,0 +1,17 @@
+# RUN 1 - INVALID for A2 / A3: S1 not met (gross P&L under H0 far from 0). Cause: synthetic intrabar high/low with an assumed 'adverse first, then favourable' order gives a contrarian grid a free dip-and-rebound inside every bar (written as pessimistic, it was optimistic for these EAs). Kept as a record; superseded by run 2 (path model).
+A1 edge: rounds 200; P4 passes per round 1.27; selected per round 0.15; rounds with >= 1 P8a pass 3 = 0.0150 [95% CI 0.0031-0.0432] (power, recorded only)
+A1 edge: passers 3; of them stopped out / bankrupt in the next year 0 (0.000); mean next-year net 90.2 USD
+A1 null: rounds 400; P4 passes per round 0.99; selected per round 0.12; rounds with >= 1 P8a pass 3 = 0.0075 [95% CI 0.0015-0.0218] -> OK (proposed criterion <= 5%)
+A1 null: passers 3; of them stopped out / bankrupt in the next year 0 (0.000); mean next-year net -488.3 USD
+A1 S1: mean gross P&L per run -7.33 USD (SE 66.04) -> OK
+A2 edge: rounds 200; P4 passes per round 9.66; selected per round 0.70; rounds with >= 1 P8a pass 79 = 0.3950 [95% CI 0.3268-0.4664] (power, recorded only)
+A2 edge: passers 80; of them stopped out / bankrupt in the next year 0 (0.000); mean next-year net 3371.7 USD
+A2 null: rounds 400; P4 passes per round 8.52; selected per round 0.63; rounds with >= 1 P8a pass 146 = 0.3650 [95% CI 0.3177-0.4143] -> NOT MET (proposed criterion <= 5%)
+A2 null: passers 147; of them stopped out / bankrupt in the next year 1 (0.007); mean next-year net 3047.2 USD
+A2 S1: mean gross P&L per run 3246.86 USD (SE 187.02) -> NOT MET
+A3 edge: rounds 200; P4 passes per round 13.39; selected per round 0.89; rounds with >= 1 P8a pass 76 = 0.3800 [95% CI 0.3125-0.4511] (power, recorded only)
+A3 edge: passers 76; of them stopped out / bankrupt in the next year 3 (0.039); mean next-year net 946.7 USD
+A3 S3: lanes without any stop-out in D+V0+V1: 802 of 1250; P(stop-out next year): structural (EA re-run) 0.077 vs naive shuffle of its own closed P&L 0.0000
+A3 null: rounds 400; P4 passes per round 12.18; selected per round 0.86; rounds with >= 1 P8a pass 157 = 0.3925 [95% CI 0.3443-0.4423] -> NOT MET (proposed criterion <= 5%)
+A3 null: passers 157; of them stopped out / bankrupt in the next year 6 (0.038); mean next-year net 1048.3 USD
+A3 S1: mean gross P&L per run 272.98 USD (SE 76.15) -> NOT MET
