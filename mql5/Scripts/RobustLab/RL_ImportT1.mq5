@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
 //| RL_ImportT1.mq5                                                  |
-//| Study A fidelity check (docs/research/study_a/SPEC.md §3):       |
+//| Study A fidelity check (docs/research/study_a/SPEC.md section 3):       |
 //| builds two custom symbols from synthetic M1 bars written by      |
 //| `rlab studya fidelity-export` in Common\Files:                   |
 //|   RL_T1_H0_M1.csv -> EURUSD_RLT1 (no edge)                       |
@@ -8,7 +8,7 @@
 //| Same steps as RL_ImportH0 v1.02 (P10, left unchanged): properties |
 //| from EURUSD, currencies / tick size set explicitly, spread fixed  |
 //| at 10 points; in addition the SWAPS ARE SET TO 0 so that the     |
-//| tester's P&L can be compared with the swap-free T1 model (§3.3). |
+//| tester's P&L can be compared with the swap-free T1 model (section 3.3). |
 //| Synthetic data only: never trade on these symbols.               |
 //| API: CustomSymbolCreate / CustomSymbolSetDouble / CustomRatesReplace |
 //| (MQL5 reference; confirmation level B, checked on the terminal). |
