@@ -136,16 +136,20 @@ def test_config_guards(tmp_path):
 def test_fidelity_export_and_model(tmp_path):
     from robustlab.nulltest import fidelity as fd
 
+    import datetime as dt
+
     info = fd.export(tmp_path / "h0.csv", 3, PM, 1.10)
     lines = (tmp_path / "h0.csv").read_text().splitlines()
-    assert info["rows"] == len(lines) == 3 * 48 * 30
+    assert info["rows"] == len(lines) == (fd.PRE_DAYS + 3) * 48 * 30
     first = lines[0].split(",")
-    assert int(first[0]) == int(fd.START.replace(tzinfo=__import__("datetime").UTC).timestamp()) and first[6] == "10"
+    start = dt.datetime.combine(fd.data_start(), dt.time()).replace(tzinfo=dt.UTC)
+    assert int(first[0]) == int(start.timestamp()) and first[6] == "10"
+    assert fd.data_start().weekday() < 5 and info["test_from"] == "2012-01-02" and info["to_exclusive"] == "2012-01-05"
     # the model on a hand-made path: closes rise then fall -> one buy, then close + sell
     n_days = 40
     path = fd.path_of(n_days, PM, 1.10)
     deals = fd.smoketest_model(path, n_days, 2, 5, PM)
-    assert deals and deals[0].entry == "in"
+    assert deals and deals[0].entry == "in" and deals[0].time >= fd.START
     assert all(a.time <= b.time for a, b in zip(deals, deals[1:], strict=False))
     # a tester record identical to the model matches; a shifted one does not
     rows = [{"ticket": str(i), "time": d.time.strftime("%Y.%m.%d %H:%M:%S"), "type": "0" if d.side == "buy" else "1",

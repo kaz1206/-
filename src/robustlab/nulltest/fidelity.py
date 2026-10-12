@@ -5,7 +5,8 @@
    (flat bars), so H4 bar k closes at path[8k] and the next bar's first tick is path[8k + 1].
 2. compare: the job's deals vs the exact rules of RL_SmokeTest (SMA cross on the last two closed bars, checked on
    the first tick of a new bar; close the open position, then buy at ask / sell at bid; fixed lot).
-Dates are in 2012 (synthetic data, far from the holdout). This checks the model of the EA, not the null itself.
+Dates are in 2011-2012 (synthetic data, far from the holdout). The data start PRE_DAYS weekdays before the test period
+so that the tester has its bar history; the comparison covers the test period only. This checks the model of the EA, not the null itself.
 """
 
 from __future__ import annotations
@@ -20,15 +21,27 @@ import numpy as np
 from robustlab.nulltest import sim
 
 FIDELITY_SEED = 20261014
-START = dt.datetime(2012, 1, 2)  # a Monday
+START = dt.datetime(2012, 1, 2)  # a Monday: the test period starts here
+PRE_DAYS = 30  # weekdays of history before START: the tester needs about 100 bars before the test start
+#                (found on the terminal 2026-10-12: without them it moved the start to 2012-01-25)
 SYMBOL = "RL_H0_EURUSD"
 SPREAD_POINTS = 10
 POINT = 0.00001
 
 
+def data_start() -> dt.date:
+    d, n = START.date(), 0
+    while n < PRE_DAYS:
+        d -= dt.timedelta(days=1)
+        if d.weekday() < 5:
+            n += 1
+    return d
+
+
 def weekdays(n_days: int) -> list[dt.date]:
-    out, d = [], START.date()
-    while len(out) < n_days:
+    """PRE_DAYS weekdays of history, then the n_days weekdays of the test period."""
+    out, d = [], data_start()
+    while len(out) < PRE_DAYS + n_days:
         if d.weekday() < 5:
             out.append(d)
         d += dt.timedelta(days=1)
@@ -36,7 +49,8 @@ def weekdays(n_days: int) -> list[dt.date]:
 
 
 def path_of(n_days: int, pm: sim.PriceModel, start_price: float, seed: int = FIDELITY_SEED) -> np.ndarray:
-    return sim.prices(1, n_days, np.random.default_rng([seed, 99]), pm, start_price)[0]
+    """History (PRE_DAYS) plus the test period (n_days), one continuous path."""
+    return sim.prices(1, PRE_DAYS + n_days, np.random.default_rng([seed, 99]), pm, start_price)[0]
 
 
 def step_time(s: int, days: list[dt.date], steps_per_day: int) -> dt.datetime:
@@ -58,7 +72,7 @@ def export(out_csv: Path, n_days: int, pm: sim.PriceModel, start_price: float) -
             for m in range(minutes):
                 ts = int((t0 + dt.timedelta(minutes=m)).replace(tzinfo=dt.UTC).timestamp())
                 f.write(f"{ts},{px},{px},{px},{px},1,{SPREAD_POINTS}\n")
-    return {"rows": (len(path) - 1) * minutes, "from": days[0].isoformat(),
+    return {"rows": (len(path) - 1) * minutes, "data_from": days[0].isoformat(), "test_from": START.date().isoformat(),
             "to_exclusive": (days[-1] + dt.timedelta(days=1)).isoformat(), "symbol": SYMBOL}
 
 
@@ -84,7 +98,10 @@ def smoketest_model(path: np.ndarray, n_days: int, fast: int, slow: int, pm: sim
 
     deals: list[Deal] = []
     pos = 0
+    first = PRE_DAYS * spd       # the EA starts flat at the first tick of the test period (step first + 1)
     for k in range(2, K):        # first tick of bar k + 1, last closed bars k - 1 and k
+        if k * spb < first:
+            continue
         f0, f1, s0, s1 = sma(k - 1, fast), sma(k, fast), sma(k - 1, slow), sma(k, slow)
         if None in (f0, f1, s0, s1):
             continue
