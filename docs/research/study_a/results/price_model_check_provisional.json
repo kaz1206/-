@@ -1,11 +1,52 @@
 {
- "calibration_hash": null,
+ "calibration_hash": "108d42816fa17dc6729f19db7301b2a9a733977130316a871ae4c57d601f6273",
  "config_hash": "33cb1f490a79822a47325f964d0b3652791a0d74e32c3d2e8d5b152faa8923df",
- "issues": [
-  "P paths not checked: no calibration yet (run again after `rlab studya calibrate`)"
- ],
- "ok": false,
- "p_paths": null,
+ "issues": [],
+ "ok": true,
+ "p_paths": {
+  "P_E1_0.5": {
+   "non_positive_rounds": [],
+   "price_max": 5.98872,
+   "price_min": 0.14729,
+   "rounds": 400,
+   "scale": 9.000000000000002e-05
+  },
+  "P_E1_1.0": {
+   "non_positive_rounds": [],
+   "price_max": 9.68066,
+   "price_min": 0.08113,
+   "rounds": 400,
+   "scale": 0.0001425
+  },
+  "P_E1_1.5": {
+   "non_positive_rounds": [],
+   "price_max": 15.65122,
+   "price_min": 0.02917,
+   "rounds": 400,
+   "scale": 0.00020500000000000005
+  },
+  "P_E2_0.5": {
+   "non_positive_rounds": [],
+   "price_max": 8.46551,
+   "price_min": 0.14738,
+   "rounds": 400,
+   "scale": 8.750000000000001e-05
+  },
+  "P_E2_1.0": {
+   "non_positive_rounds": [],
+   "price_max": 11.24511,
+   "price_min": 0.06655,
+   "rounds": 400,
+   "scale": 0.0001425
+  },
+  "P_E2_1.5": {
+   "non_positive_rounds": [],
+   "price_max": 62.10728,
+   "price_min": 0.01848,
+   "rounds": 400,
+   "scale": 0.00020875000000000006
+  }
+ },
  "prices_version": "pa2",
  "s_paths": {
   "absolute_width": {
