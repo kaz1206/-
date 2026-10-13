@@ -1507,6 +1507,7 @@ def studya_fidelity_run(config: Path = STUDYA_CFG,
                 row = db.one("SELECT sha256 FROM job_artifact WHERE job_id = ? AND role = ?", (job["job_id"], role))
                 return store.read(row["sha256"]).decode("utf-8-sig")
 
+            job_id = job["job_id"]
             deals = tr.parse_csv_text(art("telemetry_deals"), tr.DEALS_COLUMNS, "deals")
             daily = tr.parse_csv_text(art("telemetry_daily"), tr.DAILY_COLUMNS, "daily")
             env = json.loads(art("telemetry_env"))
@@ -1516,12 +1517,33 @@ def studya_fidelity_run(config: Path = STUDYA_CFG,
         item["raw"] = fd.raw_of(deals, daily, env, stats.get("profit"))
         if early:
             item["raw"]["ended_early"] = out.message
+        if t.purpose == "stop_out":   # why the test ended: known log lines only, masked (F8; SPEC §12.10 #15)
+            item["raw"]["tester_log"] = _masked_log_lines(workspace, job_id)
     _studya_fidelity_report(st, report)
+
+
+def _masked_log_lines(workspace: Path, job_id: str) -> list[str]:
+    from robustlab.mt5 import log_digest, terminal
+    from robustlab.storage.artifacts import ArtifactStore
+
+    db = _open(workspace)
+    try:
+        store = ArtifactStore(workspace.resolve() / "artifacts", db)
+        out = []
+        for seg in db.all("SELECT name, sha256 FROM job_artifact WHERE job_id = ? AND role = 'log_segment' ORDER BY name",
+                          (job_id,)):
+            shown, _hidden = log_digest.digest(terminal.decode_log(store.read(seg["sha256"])), max_lines=200)
+            out += [f"{seg['name'].split('/')[0]}: {ln}" for ln in shown]
+        return out
+    finally:
+        db.close()
 
 
 @studya_app.command("fidelity-check")
 def studya_fidelity_check(config: Path = STUDYA_CFG,
-                          report: Path | None = typer.Option(None, "--report", help="Default: results/fidelity_t1.json")) -> None:
+                          report: Path | None = typer.Option(None, "--report", help="Default: results/fidelity_t1.json"),
+                          out: Path | None = typer.Option(None, "--out", help="Write the judgement here (the input "
+                                                                             "file is never modified)")) -> None:
     """Re-judge an attached fidelity_t1.json from its raw tester data with the current T1 model (no MT5 needed)."""
     from robustlab.studya import evaluate as E
     from robustlab.studya import run as R
@@ -1530,10 +1552,10 @@ def studya_fidelity_check(config: Path = STUDYA_CFG,
     if not path.exists():
         typer.echo(f"no report {path}", err=True)
         raise typer.Exit(1)
-    _studya_fidelity_report(E.setup(config), json.loads(path.read_text(encoding="utf-8")))
+    _studya_fidelity_report(E.setup(config), json.loads(path.read_text(encoding="utf-8")), out)
 
 
-def _studya_fidelity_report(st, report: dict) -> None:
+def _studya_fidelity_report(st, report: dict, out: Path | None = None) -> None:
     from robustlab.studya import fidelity as fd
     from robustlab.studya import run as R
 
@@ -1550,9 +1572,11 @@ def _studya_fidelity_report(st, report: dict) -> None:
     for i in rep["account_issues"]:
         typer.echo(f"  {i}")
     typer.echo(f"implied stop-out bracket (margin level %): {rep['implied_stop_out_bracket']}")
-    fd.save(rep, R.RESULTS / "fidelity_t1.json")
-    typer.echo(f"=== fidelity {fd.DEFINITION}: {'MATCH (all ' + str(rep['n_tests']) + ' tests + settings)' if rep['match'] else 'NOT MATCHED'} ===")
-    typer.echo(f"saved: {R.RESULTS / 'fidelity_t1.json'}")
+    dest = out or R.RESULTS / "fidelity_t1.json"
+    fd.save(rep, dest)
+    typer.echo(f"=== fidelity {fd.DEFINITION}: {rep['verdict']}"
+               f"{' (all ' + str(rep['n_tests']) + ' tests + settings)' if rep['match'] else ''} ===")
+    typer.echo(f"saved: {dest}")
     raise typer.Exit(0 if rep["match"] else 2)
 
 

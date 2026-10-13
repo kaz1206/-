@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -36,10 +37,11 @@ ACCOUNT_FILE = "RL_T1_account.json"
 E1_SCALE = 2.5e-4                    # a visible trend for the comparison; the size does not matter here
 SPREAD_POINTS = 10
 POINT = 0.00001
-DEFINITION = "t2"
+DEFINITION = "t3"   # t3 (SPEC §12.10): #8 on every deal by kind, spread_float diagnostic only, #15 early end
 DAILY_TOL = 0.01                     # USD, end-of-day equity (SPEC §12.2)
 MARGIN_LEVEL_TOL = 0.015             # percentage points: 2-decimal rounding of both sides (SPEC §12.3)
 ENV_KEYS = ("account_currency", "account_leverage", "account_margin_mode", "initial_balance", "terminal_build",
+            "first_tick", "last_tick", "ticks", "bars",
             "symbol", "observed", "tracking")   # never account_server / account_company
 
 
@@ -217,25 +219,40 @@ def compare(st: E.Setup, t: FidTest, res: t1.TestResult, raw: dict[str, Any]) ->
         issues.append(f"#6 commission/fee {comm}")
     if tester_profit is not None and abs(round(tester_profit, 2) - round(profit_ea + profit_end + swap + comm, 2)) > 0.005:
         issues.append(f"#7 net {tester_profit} != EA closes {profit_ea:.2f} + end of test {profit_end:.2f}")
-    # #8 spread: entry price - synthetic bid at that step
-    bad_spread = 0
+    # #8 spread (t3): EVERY tester deal against the synthetic bid / ask of its step, recorded by kind. Expected
+    # price fixed before the run: a buy deal at ask = bid + 10 points, a sell deal at bid, whatever closes it
+    # (entry, EA close, stop-out, end of test). A kind that differs is reported as such, not bent to the rule.
+    spread_by_kind: dict[str, dict[str, Any]] = {}
     for b in td:
-        if b["entry"] != "0":
-            continue
+        kind = ("entry" if b["entry"] == "0" else "close_end_of_test" if is_end(b)
+                else "close_stop_out" if is_so(b) else "close_ea")
         tb = _parse_time(b["time"])
-        day = days.index(tb.date())
-        s = day * st.spd + (tb.hour * 60 + tb.minute) // (24 * 60 // st.spd) + 1
-        want = SPREAD_POINTS * POINT if b["type"] == "0" else 0.0
-        if abs(float(b["price"]) - p[s] - want) >= 0.5 * POINT:
-            bad_spread += 1
-    if bad_spread:
-        issues.append(f"#8 spread: {bad_spread} entries not at bid + {SPREAD_POINTS} points (buy) / bid (sell)")
+        if tb >= last_step_start:
+            s = w.s_end
+        else:
+            s = days.index(tb.date()) * st.spd + (tb.hour * 60 + tb.minute) // (24 * 60 // st.spd) + 1
+        want = round(float(p[s]) + (SPREAD_POINTS * POINT if b["type"] == "0" else 0.0), 5)
+        diff = round((float(b["price"]) - want) / POINT, 1)
+        k = spread_by_kind.setdefault(kind, {"deals": 0, "off": 0, "max_abs_diff_points": 0.0, "examples": []})
+        k["deals"] += 1
+        k["max_abs_diff_points"] = max(k["max_abs_diff_points"], abs(diff))
+        if abs(diff) >= 0.5:
+            k["off"] += 1
+            if len(k["examples"]) < 3:
+                k["examples"].append({"time": b["time"], "type": b["type"], "price": b["price"], "expected": f"{want:.5f}"})
+    for kind, k in spread_by_kind.items():
+        if k["off"]:
+            issues.append(f"#8 spread {kind}: {k['off']} of {k['deals']} deals not at the expected bid / ask "
+                          f"(max {k['max_abs_diff_points']} points; {k['examples'][:1]})")
     sym = env.get("symbol") or {}
     settings = {"spread_float": sym.get("spread_float"), "observed_spread": (env.get("observed") or {}).get("spread"),
                 "swap_long": sym.get("swap_long"), "swap_short": sym.get("swap_short"), "symbol": sym.get("name")}
-    if settings["spread_float"] not in (False, 0) or settings["swap_long"] not in (0, 0.0) or \
-            settings["swap_short"] not in (0, 0.0):
-        issues.append(f"#8/#5 symbol settings {settings}")
+    # t3: spread_float is a DIAGNOSTIC (the tester uses the spread written in every bar = 10); the observed spread
+    # must still be 10 and the swaps 0
+    if settings["observed_spread"] != SPREAD_POINTS:
+        issues.append(f"#8 observed spread {settings['observed_spread']} (expected {SPREAD_POINTS})")
+    if settings["swap_long"] not in (0, 0.0) or settings["swap_short"] not in (0, 0.0):
+        issues.append(f"#5 symbol swaps {settings}")
     # #9 daily equity: same days, end-of-day equity within 0.01 USD (SPEC §12.2)
     mdd = {r["date"]: float(r["equity_close"]) for r in res.daily}
     tdd = {r["date"]: float(r["equity_close"]) for r in raw["daily"]}
@@ -266,6 +283,29 @@ def compare(st: E.Setup, t: FidTest, res: t1.TestResult, raw: dict[str, Any]) ->
     so_day = next((d["time"][:10] for d in md if is_so(d)), None)
     if ended_early and (so_day is None or not tdd or max(tdd) < so_day):
         issues.append(f"#9 the tester ended at {max(tdd) if tdd else None}, before the model's stop-out day {so_day}")
+    # #15 (C99): an early end counts as "MT5 ended the test after the stop-out" only if ALL hold; otherwise it is
+    # data loss or a model error and the test is UNDETERMINED / not matched (SPEC §12.10)
+    early_check = None
+    if ended_early:
+        so_t_time = next((d["time"] for d in td if is_so(d)), None)
+        last_tick = env.get("last_tick")
+        tlog = raw.get("tester_log") or []
+        reason_lines = [ln for ln in tlog if re.search(r"stop.?out|stopped|margin|test.*(end|finish|stop)", ln, re.I)]
+        dates = sorted(tdd)
+        contiguous = dates == [d for d in (r["date"] for r in res.daily) if d <= (dates[-1] if dates else "")]
+        early_check = {"tester_stop_out_deal": so_t_time, "last_tick": last_tick,
+                       "last_tick_after_stop_out": bool(so_t_time and last_tick and last_tick >= so_t_time),
+                       "daily_contiguous": contiguous, "tester_log_reason_lines": reason_lines[:5]}
+        if t.purpose != "stop_out":
+            issues.append("#15 a regular test ended early (data loss)")
+        if not so_t_time:
+            issues.append("#15 UNDETERMINED: ended early without a tester stop-out deal (data loss?)")
+        if not early_check["last_tick_after_stop_out"]:
+            issues.append(f"#15 UNDETERMINED: last tick {last_tick} not after the stop-out deal {so_t_time}")
+        if not contiguous:
+            issues.append("#15 UNDETERMINED: the tester's daily rows have gaps")
+        if not reason_lines:
+            issues.append("#15 UNDETERMINED: no tester log line explains the end of the test")
     for name, ds in (("model", md), ("tester", td)):
         first_so = next((d["time"] for d in ds if is_so(d)), None)
         if first_so is not None and any(d["time"] > first_so for d in ds):
@@ -298,6 +338,7 @@ def compare(st: E.Setup, t: FidTest, res: t1.TestResult, raw: dict[str, Any]) ->
             "daily": {"days_model": len(mdd), "days_tester": len(tdd), "max_abs_diff": max(diffs) if diffs else None,
                       "days_over_tol": len(bad_days)},
             "tester_ended_early": ended_early, "tester_last_day": max(tdd) if tdd else None,
+            "early_end_check": early_check, "spread_by_kind": spread_by_kind,
             "stop_out": {"model": so_m, "tester": so_t, "tester_tracking": so_trk,
                          "time": [next((d["time"] for d in md if is_so(d)), None),
                                   next((d["time"] for d in td if is_so(d)), None)],
@@ -335,7 +376,7 @@ def check_account(st: E.Setup, acct: dict[str, Any] | None) -> list[str]:
 
 
 def check(st: E.Setup, report: dict[str, Any]) -> dict[str, Any]:
-    """Re-judge a report from its raw tester data with the CURRENT model (definition t2)."""
+    """Re-judge a report from its raw tester data with the CURRENT model and definition (t3)."""
     want = tests(st)
     by_name = {t["name"]: t for t in report.get("tests", []) if "name" in t}
     out_tests, issues = [], []
@@ -353,13 +394,18 @@ def check(st: E.Setup, report: dict[str, Any]) -> dict[str, Any]:
                 and x.get("match") and x["stop_out"]["bracket_model"]]
     implied = [max(b[0] for b in brackets), min(b[1] for b in brackets)] if brackets else None
     so_pct = float(st.cfg["account"]["stop_out_pct"])
-    if not implied or not (implied[0] <= so_pct < implied[1]):
+    if not implied:
+        issues.append(f"#14 UNDETERMINED: no matched stop-out test, the {so_pct}% level cannot be bracketed")
+    elif not (implied[0] <= so_pct < implied[1]):
         issues.append(f"#14 the stop-out tests do not bracket {so_pct}%: {implied}")
     match = not issues and all(x.get("match") for x in out_tests)
+    all_issues = issues + [i for x in out_tests for i in x.get("issues", [])]
+    mismatched = any(not ("UNDETERMINED" in i or i.startswith("not run") or "missing" in i) for i in all_issues)
+    verdict = "MATCH" if match else ("MISMATCH" if mismatched else "UNDETERMINED")
     return {"definition": DEFINITION, "config_hash": st.cfg_hash, "model_version": t1.T1_VERSION,
             "tests": out_tests, "account_settings": report.get("account_settings"),
             "implied_stop_out_bracket": implied, "account_issues": issues, "n_tests": len(want),
-            "match": match}
+            "match": match, "verdict": verdict}
 
 
 def save(report: dict[str, Any], path: Path) -> None:

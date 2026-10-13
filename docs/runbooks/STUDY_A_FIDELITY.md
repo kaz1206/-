@@ -66,7 +66,7 @@ py -3.13 -m uv sync
 .\.venv\Scripts\rlab.exe studya fidelity-run
 ```
 - MT5 が 15 回開いて閉じます（画面に触らない）。内訳は、通常の 12 本（資金 10,000 USD）と、**ロスカット専用の 3 本**（テスト用に資金を 200〜300 USD に下げたもの。ロットと EA の売買ルールは同じ）。結果は専用のワークスペース `workspace_studya_fid` に入ります（Git には入りません）。
-- 最後の行が **`=== fidelity t2: MATCH (all 15 tests + settings) ===`** なら合格。
+- 最後の行が **`=== fidelity t3: MATCH (all 15 tests + settings) ===`** なら合格。`MISMATCH`（不一致）や `UNDETERMINED`（判定不能）でも、そのまま次へ。
 - `NOT MATCHED` の場合も、そのまま次へ（ファイルに原因の手がかりが入っています）。
 
 ## 6. 送ってほしいもの

@@ -79,7 +79,7 @@ def test_fidelity_plumbing_matches_and_catches_mismatches(env, monkeypatch, tmp_
     assert out["H0"]["rows"] == out["E1"]["rows"] > 0
     code, rep, txt = _run(env, monkeypatch, tmp_path / "ok", _doc(st))
     assert code == 0, txt + json.dumps(rep, indent=1)[:3000]
-    assert rep["match"] and rep["definition"] == "t2" and len(rep["tests"]) == 15
+    assert rep["match"] and rep["definition"] == "t3" and rep["verdict"] == "MATCH" and len(rep["tests"]) == 15
     so = [t for t in rep["tests"] if t["purpose"] == "stop_out"]
     assert len(so) == 3 and all(t["stop_out"]["model"] == t["stop_out"]["tester"] == 1 for t in so)
     lo, hi = rep["implied_stop_out_bracket"]
@@ -136,9 +136,19 @@ def test_fidelity_plumbing_matches_and_catches_mismatches(env, monkeypatch, tmp_
     code, rep, _ = _run(env, monkeypatch, tmp_path / "margin", _doc(st, margin))
     assert code == 2 and any(i.startswith("#12") for i in _bad(rep)[0]["issues"])
 
+    # 7. t3: spread_float = true is a diagnostic only (the spread is checked on every deal price)
+    doc = _doc(st)
+    for sym in doc["symbols"].values():
+        sym["env_symbol"]["spread_float"] = True
+    code, rep, _ = _run(env, monkeypatch, tmp_path / "float", doc)
+    assert code == 0 and rep["match"]
+    assert all(t["symbol_settings"]["spread_float"] is True for t in rep["tests"])
+    assert all(k["off"] == 0 for t in rep["tests"] for k in t["spread_by_kind"].values())
+
     # 6. account settings: missing file / another stop-out level -> not confirmed
     code, rep, _ = _run(env, monkeypatch, tmp_path / "noacct", _doc(st), account=None)
     assert code == 2 and not _bad(rep) and any("missing" in i for i in rep["account_issues"])
+    assert rep["verdict"] == "UNDETERMINED"
     other = json.loads(json.dumps(ACCOUNT))
     other["account"]["so_so"] = 50.0
     code, rep, _ = _run(env, monkeypatch, tmp_path / "so50", _doc(st), account=other)
@@ -153,12 +163,18 @@ def test_stop_out_test_that_mt5_ended_early_is_compared_on_its_days():
     env = {"account_currency": "USD", "account_leverage": 100, "initial_balance": t.deposit,
            "symbol": {"spread_float": False, "swap_long": 0.0, "swap_short": 0.0, "currency_profit": "USD",
                       "currency_margin": "EUR", "contract_size": 100000.0, "tick_size": 1e-5, "tick_value": 1.0},
-           "observed": {"spread": 10}, "tracking": r.tracking}
+           "observed": {"spread": 10}, "tracking": r.tracking, "last_tick": f"{so_day} 23:59:30"}
     days_kept = [x for x in r.daily if x["date"] <= so_day]
     raw = {"deals": [dict(d) for d in r.deals], "daily": days_kept, "env": env, "profit": r.stats["profit"],
-           "ended_early": "DATA_COVERAGE: last tick ... is more than 7 days before ..."}
+           "ended_early": "DATA_COVERAGE: last tick ... is more than 7 days before ...",
+           "tester_log": ["Tester: 12:00:00.000 Tester: stop out occurred"]}
     cmp = fd.compare(st, t, r, raw)
     assert cmp["match"], cmp["issues"]
+    assert cmp["early_end_check"]["last_tick_after_stop_out"] and cmp["spread_by_kind"]["close_stop_out"]["off"] == 0
+    # #15: without a log line explaining the end, or with the last tick before the stop-out -> UNDETERMINED
+    assert any("no tester log line" in i for i in fd.compare(st, t, r, dict(raw, tester_log=[]))["issues"])
+    env_early = dict(env, last_tick=f"{days_kept[0]['date']} 00:00:30")
+    assert any("UNDETERMINED: last tick" in i for i in fd.compare(st, t, r, dict(raw, env=env_early))["issues"])
     assert cmp["tester_last_day"] == so_day and cmp["daily"]["days_tester"] == len(days_kept)
     too_early = dict(raw, daily=[x for x in r.daily if x["date"] < so_day])
     assert any(i.startswith("#9 the tester ended") for i in fd.compare(st, t, r, too_early)["issues"])
