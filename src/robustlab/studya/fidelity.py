@@ -290,7 +290,7 @@ def compare(st: E.Setup, t: FidTest, res: t1.TestResult, raw: dict[str, Any]) ->
         so_t_time = next((d["time"] for d in td if is_so(d)), None)
         last_tick = env.get("last_tick")
         tlog = raw.get("tester_log") or []
-        reason_lines = [ln for ln in tlog if re.search(r"stop.?out|stopped|margin|test.*(end|finish|stop)", ln, re.I)]
+        reason_lines = [ln for ln in tlog if re.search(r"stop.?out|stopped|margin|test.*(end|finish|stop)", ln, re.IGNORECASE)]
         dates = sorted(tdd)
         contiguous = dates == [d for d in (r["date"] for r in res.daily) if d <= (dates[-1] if dates else "")]
         early_check = {"tester_stop_out_deal": so_t_time, "last_tick": last_tick,
