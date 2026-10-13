@@ -10,7 +10,8 @@ RL_TSMom: on every new bar g_count++; decide when (g_count - 1) % H == 0 and Bar
 c0 = close[1 + L]; c1 > c0 -> long, c1 < c0 -> short, equal -> nothing; a different direction closes then opens.
 The tester closes what is left at the end ("end of test"). Stop-out as in MT5: when the margin level falls to
 stop_out_pct the position is closed at that tick (reason SO); later orders are refused while the balance is below the
-required margin ("not enough money"). Telemetry records equity BEFORE the trade on the deciding
+required margin ("not enough money"). Margin (as measured on MT5, fidelity t2, SPEC §12.9): lots x contract x the
+OPENING price / leverage, rounded half-up to cents, fixed while the position is open (not the current price). Telemetry records equity BEFORE the trade on the deciding
 tick and after it on the next tick (same price inside a step): the day minimum includes both.
 Output is in telemetry form (strings with the precision the EA writes) so that the production metric code reads it.
 """
@@ -23,7 +24,7 @@ from typing import Any
 
 import numpy as np
 
-T1_VERSION = "t1a"
+T1_VERSION = "t1b"   # t1b: margin fixed at the opening price, rounded half-up to cents (MT5, SPEC §12.9)
 END_OF_TEST = "end of test"
 MAGIC = 26101202  # RL_TSMOM_MAGIC
 
@@ -69,6 +70,11 @@ def _streaks(pnls: list[float]) -> tuple[int, float, int, float]:
         if cl > best_l or (cl == best_l and al < amt_l):
             best_l, amt_l = cl, al
     return best_w, amt_w, best_l, amt_l
+
+
+def margin_of(lots: float, contract: float, price, leverage: float):
+    """MT5 margin in USD for EURUSD-like symbols: at the opening price, rounded half-up to cents (SPEC §12.9)."""
+    return np.floor(np.asarray(lots * contract * np.asarray(price) / leverage) * 100.0 + 0.5 + 1e-7) / 100.0
 
 
 def run_test(p: np.ndarray, w: Window, lookback: int, hold: int, *, lots: float, spread: float, contract: float,
@@ -125,7 +131,7 @@ def run_test(p: np.ndarray, w: Window, lookback: int, hold: int, *, lots: float,
             return None
         mk = bid[j0:j1 + 1] if pos > 0 else ask[j0:j1 + 1]
         eqs = bal + pos * (mk - entry) * units
-        ml = eqs / (lots * contract * bid[j0:j1 + 1] / leverage) * 100.0
+        ml = eqs / float(margin_of(lots, contract, entry, leverage)) * 100.0
         hit = np.flatnonzero(ml <= stop_out_pct)
         return j0 + int(hit[0]) if len(hit) else None
 
@@ -154,7 +160,7 @@ def run_test(p: np.ndarray, w: Window, lookback: int, hold: int, *, lots: float,
         if pos:
             close(j, "EA", "", "3")
         price = a if new > 0 else b
-        if bal >= lots * contract * price / leverage:      # MT5 refuses an order without enough free margin
+        if bal >= float(margin_of(lots, contract, price, leverage)):   # MT5 refuses an order without free margin
             entry, pos = price, new
             if full:
                 res.deals.append(_deal(tickets, step_time(s, days, spd), 0 if new > 0 else 1, 0, lots, entry, 0.0,
@@ -215,7 +221,7 @@ def run_test(p: np.ndarray, w: Window, lookback: int, hold: int, *, lots: float,
     dd = peak - order_eq
     i_dd = int(np.argmax(dd)) if len(dd) else 0
     held = pos_arr != 0
-    margin = lots * contract * bid / leverage
+    margin = np.where(held, margin_of(lots, contract, entry_arr, leverage), 1.0)
     ml = np.where(held, eq / margin * 100.0, np.inf)
     res.tracking = {
         "equity_peak": round(float(max(deposit, all_eq.max())), 2),

@@ -1487,14 +1487,20 @@ def studya_fidelity_run(config: Path = STUDYA_CFG,
         out = run_backtest(req, terminal, partition, workspace)
         item: dict = {"name": t.name, "symbol": fd.SYMBOLS[t.kind], "status": out.status, "run_id": out.run_id}
         report["tests"].append(item)
-        if out.status not in ("SUCCEEDED", "ALREADY_SUCCEEDED"):
+        # a stop-out test may end before the period end (MT5 stops the test): keep its raw data when the ONLY
+        # problems are data coverage, and record that it ended early (SPEC §12.9)
+        early = (t.purpose == "stop_out" and out.status == "QUARANTINED" and bool(out.message)
+                 and all(m.strip().startswith("DATA_COVERAGE") for m in out.message.split(";")))
+        if out.status not in ("SUCCEEDED", "ALREADY_SUCCEEDED") and not early:
             item["message"] = out.message
             typer.echo(f"{t.name}: {out.status} {out.message}")
             continue
+        if early:
+            item["ended_early"] = out.message
         db = _open(workspace)
         try:
-            job = db.one("SELECT job_id FROM job WHERE run_id = ? AND status = 'SUCCEEDED' ORDER BY job_id DESC LIMIT 1",
-                         (out.run_id,))
+            job = db.one("SELECT job_id FROM job WHERE run_id = ? AND status IN ('SUCCEEDED', 'QUARANTINED') "
+                         "ORDER BY job_id DESC LIMIT 1", (out.run_id,))
             store = ArtifactStore(workspace.resolve() / "artifacts", db)
 
             def art(role: str) -> str:
@@ -1508,6 +1514,8 @@ def studya_fidelity_run(config: Path = STUDYA_CFG,
         finally:
             db.close()
         item["raw"] = fd.raw_of(deals, daily, env, stats.get("profit"))
+        if early:
+            item["raw"]["ended_early"] = out.message
     _studya_fidelity_report(st, report)
 
 

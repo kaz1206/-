@@ -156,9 +156,11 @@ def _so_bracket(st: E.Setup, t: FidTest, res: t1.TestResult) -> list[float] | No
     if so is None:
         return None
     a = st.cfg["account"]
-    p = path_of(st, t.kind)
+    days, _ = layout(st)
+    so_time = t1.step_time(so["step"], days, st.spd).strftime("%Y.%m.%d %H:%M:%S")
     before = t.deposit + sum(c["profit"] for c in res.closes if c["step"] < so["step"])
-    margin = float(st.cfg["lots"]) * float(a["contract"]) * float(p[so["step"]]) / float(a["leverage"])
+    entry = float(next(d["price"] for d in reversed(res.deals) if d["entry"] == "0" and d["time"] <= so_time))
+    margin = float(t1.margin_of(float(st.cfg["lots"]), float(a["contract"]), entry, float(a["leverage"])))
     return [round((before + so["profit"]) / margin * 100.0, 4), res.tracking["min_margin_level"]]
 
 
@@ -237,6 +239,12 @@ def compare(st: E.Setup, t: FidTest, res: t1.TestResult, raw: dict[str, Any]) ->
     # #9 daily equity: same days, end-of-day equity within 0.01 USD (SPEC §12.2)
     mdd = {r["date"]: float(r["equity_close"]) for r in res.daily}
     tdd = {r["date"]: float(r["equity_close"]) for r in raw["daily"]}
+    ended_early = raw.get("ended_early")
+    if ended_early and t.purpose == "stop_out" and tdd:
+        # MT5 ended this stop-out test before the period end (SPEC §12.9): compare the days it ran, which must be
+        # the model's first days and must include the stop-out day; the early end itself is reported, not hidden
+        last = max(tdd)
+        mdd = {d: v for d, v in mdd.items() if d <= last}
     if set(mdd) != set(tdd):
         only_m, only_t = sorted(set(mdd) - set(tdd)), sorted(set(tdd) - set(mdd))
         issues.append(f"#9 daily dates differ: model only {len(only_m)} {only_m[:3]}, tester only {len(only_t)} {only_t[:3]}")
@@ -255,6 +263,9 @@ def compare(st: E.Setup, t: FidTest, res: t1.TestResult, raw: dict[str, Any]) ->
         issues.append(f"#10 stop-out deals model {so_m} vs tester deals {so_t} vs tester tracking {so_trk}")
     if t.purpose == "stop_out" and so_m == 0:
         issues.append("#10 stop-out test without a stop-out in the model (test setting invalid)")
+    so_day = next((d["time"][:10] for d in md if is_so(d)), None)
+    if ended_early and (so_day is None or not tdd or max(tdd) < so_day):
+        issues.append(f"#9 the tester ended at {max(tdd) if tdd else None}, before the model's stop-out day {so_day}")
     for name, ds in (("model", md), ("tester", td)):
         first_so = next((d["time"] for d in ds if is_so(d)), None)
         if first_so is not None and any(d["time"] > first_so for d in ds):
@@ -286,6 +297,7 @@ def compare(st: E.Setup, t: FidTest, res: t1.TestResult, raw: dict[str, Any]) ->
             "commission_fee": comm, "tester_profit": tester_profit, "symbol_settings": settings,
             "daily": {"days_model": len(mdd), "days_tester": len(tdd), "max_abs_diff": max(diffs) if diffs else None,
                       "days_over_tol": len(bad_days)},
+            "tester_ended_early": ended_early, "tester_last_day": max(tdd) if tdd else None,
             "stop_out": {"model": so_m, "tester": so_t, "tester_tracking": so_trk,
                          "time": [next((d["time"] for d in md if is_so(d)), None),
                                   next((d["time"] for d in td if is_so(d)), None)],

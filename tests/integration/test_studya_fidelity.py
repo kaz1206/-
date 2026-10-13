@@ -143,3 +143,22 @@ def test_fidelity_plumbing_matches_and_catches_mismatches(env, monkeypatch, tmp_
     other["account"]["so_so"] = 50.0
     code, rep, _ = _run(env, monkeypatch, tmp_path / "so50", _doc(st), account=other)
     assert code == 2 and any(i.startswith("#14 stop-out setting") for i in rep["account_issues"])
+
+
+def test_stop_out_test_that_mt5_ended_early_is_compared_on_its_days():
+    st = E.setup(CFG)
+    t = next(x for x in fd.tests(st) if x.name == "SO_E1_1512_6_300")
+    r = fd.model(st, t)
+    so_day = next(d["time"][:10] for d in r.deals if d["reason"] == "6")
+    env = {"account_currency": "USD", "account_leverage": 100, "initial_balance": t.deposit,
+           "symbol": {"spread_float": False, "swap_long": 0.0, "swap_short": 0.0, "currency_profit": "USD",
+                      "currency_margin": "EUR", "contract_size": 100000.0, "tick_size": 1e-5, "tick_value": 1.0},
+           "observed": {"spread": 10}, "tracking": r.tracking}
+    days_kept = [x for x in r.daily if x["date"] <= so_day]
+    raw = {"deals": [dict(d) for d in r.deals], "daily": days_kept, "env": env, "profit": r.stats["profit"],
+           "ended_early": "DATA_COVERAGE: last tick ... is more than 7 days before ..."}
+    cmp = fd.compare(st, t, r, raw)
+    assert cmp["match"], cmp["issues"]
+    assert cmp["tester_last_day"] == so_day and cmp["daily"]["days_tester"] == len(days_kept)
+    too_early = dict(raw, daily=[x for x in r.daily if x["date"] < so_day])
+    assert any(i.startswith("#9 the tester ended") for i in fd.compare(st, t, r, too_early)["issues"])
