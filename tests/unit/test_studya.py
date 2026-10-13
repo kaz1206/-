@@ -259,3 +259,16 @@ def test_stop_out_uses_the_given_level_and_requires_one():
     assert at30.tracking["stop_out_deals"] == 0 and at50.tracking["stop_out_deals"] == 1
     with pytest.raises(ValueError):
         t1.run_test(p, w, 2, 2, spb=spb, spd=spd, days=days, **{k: v for k, v in kw.items() if k != "stop_out_pct"})
+
+
+def test_log_digest_masks_login_and_ip_and_hides_unknown_lines():
+    from robustlab.mt5 import log_digest
+
+    text = ("KO\t0\t19:41:07.815\tNetwork\t'51234567': authorized on Demo-Server through Access Point (ping 12.3 ms)\n"
+            "KO\t0\t19:41:07.900\tNetwork\tconnected to 192.168.1.20:443 [2001:db8:0:0:0:0:2:1]\n"
+            "KO\t0\t19:41:08.000\tTerminal\tMetaTrader 5 x64 build 6258 started for MetaQuotes Ltd.\n"
+            "KO\t0\t19:41:08.100\tCharts\tsome chart line\n")
+    shown, hidden = log_digest.digest(text)
+    joined = "\n".join(shown)
+    assert "51234567" not in joined and "192.168" not in joined and "2001:db8" not in joined
+    assert "build 6258 started" in joined and hidden == 1

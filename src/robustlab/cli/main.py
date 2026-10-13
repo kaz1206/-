@@ -162,6 +162,36 @@ def jobs_list(workspace: Path = WORKSPACE, status: str | None = typer.Option(Non
                        f"deals={r['deals_count']}{err}")
 
 
+@jobs_app.command("startlog")
+def jobs_startlog(job_id: str = typer.Argument("last", help="job id, or 'last'"), workspace: Path = WORKSPACE) -> None:
+    """Diagnose a start failure: known lines of the job's terminal log, MASKED (no login / IP; other lines only
+    counted)."""
+    from robustlab.mt5 import log_digest, terminal
+    from robustlab.storage.artifacts import ArtifactStore
+
+    db = _open(workspace)
+    try:
+        job = (db.one("SELECT job_id, status, exit_code, error_detail FROM job ORDER BY job_id DESC LIMIT 1")
+               if job_id == "last" else
+               db.one("SELECT job_id, status, exit_code, error_detail FROM job WHERE job_id = ?", (job_id,)))
+        if job is None:
+            typer.echo("no such job", err=True)
+            raise typer.Exit(1)
+        typer.echo(f"job {job['job_id']} status={job['status']} exit_code={job['exit_code']}")
+        store = ArtifactStore(workspace.resolve() / "artifacts", db)
+        segs = db.all("SELECT name, sha256 FROM job_artifact WHERE job_id = ? AND role = 'log_segment' ORDER BY name",
+                      (job["job_id"],))
+        if not segs:
+            typer.echo("no terminal log was written during this job (the terminal wrote nothing after launch)")
+        for seg in segs:
+            shown, hidden = log_digest.digest(terminal.decode_log(store.read(seg["sha256"])))
+            typer.echo(f"--- {seg['name']} ({len(shown)} known lines shown, {hidden} other lines not shown)")
+            for line in shown:
+                typer.echo(f"  {line}")
+    finally:
+        db.close()
+
+
 @metrics_app.command("compute")
 def metrics_compute(job_id: str | None = typer.Argument(None, help="Job to compute (omit with --all)"),
                     all_jobs: bool = typer.Option(False, "--all", help="Every SUCCEEDED job without metrics"),
