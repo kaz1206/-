@@ -272,3 +272,4 @@ def test_log_digest_masks_login_and_ip_and_hides_unknown_lines():
     joined = "\n".join(shown)
     assert "51234567" not in joined and "192.168" not in joined and "2001:db8" not in joined
     assert "build 6258 started" in joined and hidden == 1
+    assert "19:41:08.000" in joined                      # clock times stay readable

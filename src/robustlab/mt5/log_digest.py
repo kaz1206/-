@@ -17,7 +17,7 @@ KNOWN = [re.compile(p, re.IGNORECASE) for p in (
     r"error", r"failed", r"cannot", r"invalid", r"not found", r"denied", r"expired", r"already", r"license",
     r"disabled", r"stopped", r"timeout")]
 IPV4 = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b")
-IPV6 = re.compile(r"\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{1,4}\b", re.IGNORECASE)
+IPV6 = re.compile(r"\b(?:[0-9a-f]{1,4}:){3,7}[0-9a-f]{1,4}\b", re.IGNORECASE)  # 3+ colons: not a clock time
 DIGITS = re.compile(r"\d{5,}")
 
 
