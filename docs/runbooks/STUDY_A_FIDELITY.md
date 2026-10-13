@@ -36,15 +36,16 @@ py -3.13 -m uv sync
 
 ## 4. MT5 でスクリプトを 1 回実行する
 
-1. `C:\MT5_verify\terminal64.exe` を起動する（いつものポータブル版。デモ口座）。
+1. **`C:\MT5_verify\terminal64.exe`** をエクスプローラーから起動する（いつものポータブル版。デモ口座）。デスクトップのアイコンの MT5 は別のデータフォルダなので、スクリプトが見つからない。
 2. 左の「ナビゲーター」→「スクリプト」→「RobustLab」→ **RL_ImportT1** を、どれかのチャートにドラッグする。
 3. 入力の画面はそのまま「OK」。
 4. 下の「エキスパート」タブに、次の行が出ることを確認する。
    - `RL_ImportT1: EURUSD_RLT1 … swap long 0.0000 short 0.0000 …`
    - `RL_ImportT1: EURUSD_RLT1 read … M1 bars, CustomRatesReplace returned …`（2 つの数が同じ）
    - `EURUSD_RLT2` についても同じ 2 行
-   - `RL_ImportT1: account stop-out ACCOUNT_STOPOUT_MODE_PERCENT call … so 50.00, leverage … -> RL_T1_account.json`
-     （ロスカットの方式と水準。口座番号・名義・サーバー名は書き出しません）
+   - `RL_ImportT1: account stop-out ACCOUNT_STOPOUT_MODE_PERCENT call 50.00 so 30.00, leverage 100 -> RL_T1_account.json`
+     （ロスカットの方式と水準。このデモ口座は強制決済 30%・警告 50%。模型も 30% に合わせてある。口座番号・名義・サーバー名は書き出しません）
+   - 「エキスパート」タブは、MT5 の画面下の「ツールボックス」（見えなければ Ctrl + T）の中のタブ。新しい行ほど下
    - 最後に **`RL_ImportT1: done (EURUSD_RLT1 OK, EURUSD_RLT2 OK, settings OK)`**
 5. **MT5 を閉じる**（次の手順で rlab が MT5 を自動で起動するため）。
 

@@ -73,8 +73,10 @@ def _streaks(pnls: list[float]) -> tuple[int, float, int, float]:
 
 def run_test(p: np.ndarray, w: Window, lookback: int, hold: int, *, lots: float, spread: float, contract: float,
              deposit: float, leverage: float, spb: int, spd: int, days: list[dt.date], symbol: str = "EURUSD",
-             full: bool = True, stop_out_pct: float = 50.0) -> TestResult:
+             full: bool = True, stop_out_pct: float | None = None) -> TestResult:
     """One single test of RL_TSMom on prices p (5 digits) over window w. full=False: daily equity only (calibration)."""
+    if stop_out_pct is None:
+        raise ValueError("stop_out_pct is required (the account's level, configs/study_a.yaml account.stop_out_pct)")
     units = lots * contract
     k0 = w.s_start // spb
     ks = np.arange(k0, (w.s_end - 1) // spb + 1, hold)          # bars whose first tick is inside the window

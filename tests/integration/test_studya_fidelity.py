@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CFG = ROOT / "configs" / "study_a.yaml"
 
 ACCOUNT = {"script": "RL_ImportT1", "version": "1.01",
-           "account": {"currency": "USD", "so_mode": "ACCOUNT_STOPOUT_MODE_PERCENT", "so_so": 50.0, "so_call": 100.0,
+           "account": {"currency": "USD", "so_mode": "ACCOUNT_STOPOUT_MODE_PERCENT", "so_so": 30.0, "so_call": 50.0,
                        "trade_mode": "ACCOUNT_TRADE_MODE_DEMO", "margin_mode": "ACCOUNT_MARGIN_MODE_RETAIL_HEDGING"},
            "symbols": {s: {"calc_mode": "SYMBOL_CALC_MODE_FOREX", "margin_initial": 0.0, "margin_rate_buy_initial": 1.0,
                            "margin_rate_sell_initial": 1.0, "contract_size": 100000.0, "currency_margin": "EUR",
@@ -83,7 +83,7 @@ def test_fidelity_plumbing_matches_and_catches_mismatches(env, monkeypatch, tmp_
     so = [t for t in rep["tests"] if t["purpose"] == "stop_out"]
     assert len(so) == 3 and all(t["stop_out"]["model"] == t["stop_out"]["tester"] == 1 for t in so)
     lo, hi = rep["implied_stop_out_bracket"]
-    assert lo <= 50.0 < hi
+    assert lo <= 30.0 < hi < 50.0
     assert all(t["daily"]["days_model"] == t["daily"]["days_tester"] == 520 for t in rep["tests"])
     assert all("account_server" not in t["raw"]["env"] for t in rep["tests"])
     # fidelity-check re-judges the saved raw data without the terminal
@@ -109,12 +109,12 @@ def test_fidelity_plumbing_matches_and_catches_mismatches(env, monkeypatch, tmp_
 
     # 3. the tester stops out one tick later with another reason code (= another level / no stop-out rule)
     def late(t, e):
-        if t.name == "SO_H0_126_6_200":
+        if t.name == "SO_H0_126_30_200":
             d = next(d for d in e["deals"] if d["reason"] == "6")
             d["reason"] = "3"
             e["tracking"] = {**e["tracking"], "stop_out_deals": 0}
     code, rep, _ = _run(env, monkeypatch, tmp_path / "late", _doc(st, late))
-    assert code == 2 and [t["name"] for t in _bad(rep)] == ["SO_H0_126_6_200"]
+    assert code == 2 and [t["name"] for t in _bad(rep)] == ["SO_H0_126_30_200"]
     assert any(i.startswith("#10") for i in _bad(rep)[0]["issues"])
 
     # 4. a deal after the stop-out (orders not refused)
@@ -140,6 +140,6 @@ def test_fidelity_plumbing_matches_and_catches_mismatches(env, monkeypatch, tmp_
     code, rep, _ = _run(env, monkeypatch, tmp_path / "noacct", _doc(st), account=None)
     assert code == 2 and not _bad(rep) and any("missing" in i for i in rep["account_issues"])
     other = json.loads(json.dumps(ACCOUNT))
-    other["account"]["so_so"] = 30.0
-    code, rep, _ = _run(env, monkeypatch, tmp_path / "so30", _doc(st), account=other)
+    other["account"]["so_so"] = 50.0
+    code, rep, _ = _run(env, monkeypatch, tmp_path / "so50", _doc(st), account=other)
     assert code == 2 and any(i.startswith("#14 stop-out setting") for i in rep["account_issues"])

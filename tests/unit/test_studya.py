@@ -15,7 +15,7 @@ from robustlab.studya import prices, t1
 from robustlab.studya import run as R
 
 ROOT = Path(__file__).resolve().parents[2]
-KW = {"lots": 0.1, "spread": 0.0001, "contract": 100000.0, "deposit": 10000.0, "leverage": 100.0}
+KW = {"lots": 0.1, "spread": 0.0001, "contract": 100000.0, "deposit": 10000.0, "leverage": 100.0, "stop_out_pct": 30.0}
 
 
 def days_n(n: int) -> list[dt.date]:
@@ -244,3 +244,18 @@ def test_price_check_same_draws_as_p10_and_strength_zero(tmp_path):
     rel = out["s_paths"]["relative_returns_bar_level_mean_of_50_rounds"]
     assert rel["multiplicative_path"]["bar_sd"] == pytest.approx(rel["drawn_r_t"]["bar_sd"], rel=1e-3)
     assert out["p_paths"] is None and not out["ok"]          # P paths need the calibration
+
+
+def test_stop_out_uses_the_given_level_and_requires_one():
+    spb, spd = 2, 4
+    days = days_n(6)
+    p = np.array([1.0] * 25)
+    p[8:] = 1.0010           # long 0.1 lot from step 9 at ask 1.0011 (margin about 100 USD)
+    p[13:] = 0.99            # loss about 111 USD: deposit 150 -> equity 39, margin level about 39%
+    w = t1.Window(4, 24)
+    kw = {**KW, "deposit": 150.0}
+    at30 = t1.run_test(p, w, 2, 2, spb=spb, spd=spd, days=days, **kw)
+    at50 = t1.run_test(p, w, 2, 2, spb=spb, spd=spd, days=days, **{**kw, "stop_out_pct": 50.0})
+    assert at30.tracking["stop_out_deals"] == 0 and at50.tracking["stop_out_deals"] == 1
+    with pytest.raises(ValueError):
+        t1.run_test(p, w, 2, 2, spb=spb, spd=spd, days=days, **{k: v for k, v in kw.items() if k != "stop_out_pct"})

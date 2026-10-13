@@ -2,7 +2,9 @@
 # and detection power (passes under planted edges) for the T1 archetype (= RL_TSMom v1.00).
 # Hashed into every result. The P10 config (configs/null_archetypes.yaml) is NOT used or changed.
 version: studyA-s2
-account: {deposit: 10000.0, leverage: 100.0, contract: 100000.0, spread: 0.0001, stop_out_pct: 50.0,
+# stop_out_pct: the level of the MT5 demo account the tester uses (RL_ImportT1 v1.01, 2026-10-13: percent mode,
+# margin call 50, stop out 30; SPEC §12.8). Was 50 (an assumption) before the account settings were read.
+account: {deposit: 10000.0, leverage: 100.0, contract: 100000.0, spread: 0.0001, stop_out_pct: 30.0,
           start_price: 1.10, point: 0.00001, tick_size: 0.00001, tick_value: 1.0}
 # H0 base: the P10 price model values, unchanged (SPEC §4.1)
 price: {sigma_bar: 0.0022, garch_alpha: 0.05, garch_beta: 0.93, t_df: 5, bars_per_day: 6, steps_per_bar: 8}
@@ -42,7 +44,8 @@ pilot:
 equivalence: {base_seed: 20261181, edge_seed: 20261182}
 fidelity: {seeds: {H0: 20261171, E1: 20261172}, test_weekdays: 520, pre_weekdays: 291,
            cells: [[126, 6], [126, 30], [756, 6], [756, 30], [1512, 6], [1512, 30]],
-           # stop-out tests (SPEC §12.3): small TEST deposits so that the 50% level is reached; lots and EA rules
-           # unchanged. Model: SO 2010-01-06 00:00 / 2010-10-12 22:00 / 2010-01-18 06:00, no deal afterwards.
-           stop_out_tests: [{kind: H0, cell: [126, 6], deposit: 200.0}, {kind: H0, cell: [1512, 6], deposit: 300.0},
+           # stop-out tests (SPEC §12.3, §12.8): small TEST deposits so that the 30% level is reached; lots and EA
+           # rules unchanged. Model: SO 2011-01-31 07:30 (after 17 normal deals) / 2010-10-15 00:30 / 2010-01-19 02:00,
+           # no deal afterwards.
+           stop_out_tests: [{kind: H0, cell: [126, 30], deposit: 200.0}, {kind: H0, cell: [1512, 6], deposit: 300.0},
                             {kind: E1, cell: [1512, 6], deposit: 300.0}]}

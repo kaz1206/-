@@ -104,7 +104,8 @@ def run_cell(st: Setup, p: np.ndarray, w: t1.Window, lookback: int, hold: int, f
     a = st.cfg["account"]
     return t1.run_test(p, w, lookback, hold, lots=float(st.cfg["lots"]), spread=float(a["spread"]),
                        contract=float(a["contract"]), deposit=float(a["deposit"]), leverage=float(a["leverage"]),
-                       spb=st.pm.steps_per_bar, spd=st.spd, days=st.days, full=full)
+                       spb=st.pm.steps_per_bar, spd=st.spd, days=st.days, full=full,
+                       stop_out_pct=float(a["stop_out_pct"]))
 
 
 def normalized(lookback: int, hold: int, lots: float) -> dict[str, Any]:
